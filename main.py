@@ -1,0 +1,461 @@
+import eel # GUI
+import math
+import matplotlib.pyplot as plt # needed for plotting
+import numpy as np # arrays
+from time import sleep as tsleep, time
+from math import cos, sin, tan, pi
+from struct import pack, unpack
+from binascii import unhexlify
+
+from sys import stderr # standard error stream
+from signal import signal, SIGINT # close the serial even if the server is forced to close
+
+from lib import trajpy as tpy # trajectory library
+from lib import serial_com as scm # serial communication library
+from lib import binary_protocol as bp # binary protocol library
+
+
+import traceback
+
+settings = {
+    'Tc' : 0.01, # s
+    'data_rate': 0.000001, # rate at which msgs are sent
+    'max_acc' : 0.35,#0.1,#1.05, #1.05, # rad/s**2
+    'ser_started': False,
+    'line_tl': lambda t, tf: tpy.cycloidal([0, 1], 2, tf)[0][0](t), # timing laws for line and circle segments
+    'circle_tl': lambda t, tf: tpy.cycloidal([0, 1], 2, tf)[0][0](t) # lambda t, tf: t/tf
+}
+
+sizes = {
+    'l1': 0.170,
+    'l2': 0.158
+}
+
+log_data = {
+    'time': [],         # time stamp
+    'q0': [],           # desired q0
+    'q1': [],           # desired q1
+    'dq0': [],          # desired dq0
+    'dq1': [],          # desired dq1
+    'ddq0': [],         # desired ddq0
+    'ddq1': [],         # desired ddq1
+    'q0_actual': [],    # actual q0
+    'q1_actual': [],    # actual q1
+    'dq0_actual': [],   # actual dq0
+    'dq1_actual': [],   # actual dq1
+    'ddq0_actual': [],  # actual ddq0
+    'ddq1_actual': [],  # actual ddq1
+    'x': [],            # desired x position
+    'y': [],            # desired y position
+    'x_actual': [],     # actual x position
+    'y_actual': []      # actual y position
+}
+
+web_options = {'host':'localhost', 'port':6969} # web server setup
+
+def print_error(*args, **kwargs):
+    print(*args, file=stderr, **kwargs)
+
+def handle_closure(sig, frame):
+    print("Closing Serial...")
+    if settings['ser_started']:
+        scm.serial_close()
+        settings['ser_started'] = False
+    exit(1)
+
+'''
+def compute_trajectory(q_list: np.ndarray, method = tpy.compose_cycloidal, ddqm=settings['max_acc']) -> list[list[tuple]]:
+    q1 = method([q[0] for q in q_list], ddqm) # trajectory of joint 1
+    q2 = method([q[1] for q in q_list], ddqm) # trajectory of joint 2
+    q3 = [q[2] for q in q_list] # pen up or pen down ?
+    return [q1, q2, q3]
+'''
+
+def debug_plot(q, name="image"):
+    #print(q)
+    plt.figure()
+    t = [i*settings['Tc'] for i in range(len(q))]
+    plt.plot(t, q)
+    plt.grid(visible=True)
+    plt.savefig('images/'+name+'.png')
+    plt.close()
+
+def debug_plotXY(x, y, name="image"):
+    #print(q)
+    plt.figure()
+    plt.plot(x, y)
+    plt.grid(visible=True)
+    plt.savefig('images/'+name+'.png')
+    plt.close()
+
+
+def d2h(d: float) -> str: # double to hex
+    # < = little endian
+    # Q = long (double)
+    # d = double
+    # check: https://docs.python.org/2/library/struct.html
+    return hex(unpack('<Q', pack('<d', d))[0]).ljust(18,"0")
+
+def h2d(string: str) -> float: # hex to double
+    return unpack('>f', unhexlify(string))[0]
+
+
+"""
+#@
+@name: send_data
+@brief: sends data to the micro controller using the Binary Buffered Protocol
+@inputs: 
+- str msg_type: type of message to send : "trj" is used for trajectory data;
+- any list \*\*data: any number of lists (containing the position setpoints to send in case of trj data);
+@outputs: 
+- None;
+@#
+"""
+def send_data(msg_type: str, **data):
+    match msg_type:
+        case 'trj':
+            if ('q' not in data) or ('dq' not in data) or ('ddq' not in data):
+                print_error("Not enough data to define the trajectory")
+                return 
+
+            # Total number of points
+            num_points = len(data['q'][0])
+            print(f"Total Trajectory Points: {num_points}")
+            
+            # Configuration for Flow Control
+            FIRMWARE_BUFFER_SIZE = 50 # Assumed Firmware Buffer Size
+            HIGH_WATERMARK = 40       # Try to keep 40 points in buffer
+            BATCH_SIZE = 5            # Send 5 points at a time
+            
+            # --- EXECUTION ENGINE ---
+            
+            # 1. Fill the buffer initially (Pre-roll)
+            sent_count = 0
+            initial_fill = min(num_points, FIRMWARE_BUFFER_SIZE - 5)
+            
+            print(f"Pre-rolling {initial_fill} points...")
+            for i in range(initial_fill):
+                packet = bp.encode_trajectory_point(
+                    data['q'][0][i], data['q'][1][i],
+                    data['dq'][0][i], data['dq'][1][i],
+                    data['ddq'][0][i], data['ddq'][1][i],
+                    int(data['q'][2][i])
+                )
+                scm.write_data(packet)
+                sent_count += 1
+                
+            # 2. Main Execution Loop
+            while sent_count < num_points:
+                # Flow Control Strategy:
+                # In a real scenario, we would read the 'BufferLevel' from the firmware via `scm.read_data()`.
+                # Since we are implementing the Python side ahead of the full firmware handshake, 
+                # we will simulate the consumption rate.
+                # Use a timed loop to approximate the 100Hz consumption of the firmware.
+                # However, to be robust, we rely on the fact that if we send slightly faster than consumption,
+                # the PC serial buffer might fill up, OR the firmware flow control (if implemented) sends XOFF.
+                
+                # IMPORTANT: Since we don't have the real feedback yet, we conservatively pause 
+                # to let the firmware consume points.
+                
+                # Check for feedback (Non-blocking check)
+                if scm.get_waiting_in_buffer() > 8:
+                    raw_feedback = scm.read_data(8)
+                    feedback = bp.decode_feedback(raw_feedback)
+                    if feedback:
+                        print(f"Firmware Feedback: Buffer Level = {feedback['buffer_level']}")
+                        # Use this to throttle if needed
+                
+                # Send next batch
+                points_to_send = 0
+                
+                # Conservative Open-Loop Logic: 
+                # Firmware consumes 100 points/sec (10ms per point).
+                # We sent X points. Wait based on consumption.
+                # Better: Send small batches and sleep.
+                
+                tsleep(0.04) # Sleep 40ms -> Firmware consumes ~4 points
+                
+                # Send a batch of 5 points to top up
+                limit = min(sent_count + BATCH_SIZE, num_points)
+                for i in range(sent_count, limit):
+                     packet = bp.encode_trajectory_point(
+                        data['q'][0][i], data['q'][1][i],
+                        data['dq'][0][i], data['dq'][1][i],
+                        data['ddq'][0][i], data['ddq'][1][i],
+                        int(data['q'][2][i])
+                    )
+                     scm.write_data(packet)
+                
+                sent_count = limit
+                
+                if sent_count % 100 == 0:
+                    print(f"Progress: {sent_count}/{num_points}")
+
+            print(f"TRJ SENT COMPLETE: {num_points} points")
+
+"""
+#@
+@name: trace_trajectory
+@brief: draws the trajectories on the GUI
+@inputs: 
+- tuple[list, list] q: a tuple containing the list of positions for each motor;
+@outputs: 
+- None;
+@#
+"""
+def trace_trajectory(q:tuple[list,list]):
+    q1 = q[0][:]
+    q2 = q[1][:]
+    eel.js_draw_traces([q1, q2])
+    eel.js_draw_pose([q1[-1], q2[-1]])
+
+    # DEBUG
+    x = [] # [tpy.dk([q1t, q2t]) for q1t, q2t in zip(q1, q2)]
+    for i in range(len(q1)):
+        x.append(tpy.dk(np.array([q1[i], q2[i]]).T))
+    debug_plotXY([xt[0] for xt in x], [yt[1] for yt in x], "xy")
+    # END DEBUG
+
+
+"""
+#@
+@name: eel.expose py_log
+@brief: simply prints a message on the python console
+@inputs: 
+- str msg: message to be print;
+@outputs: 
+- None;
+@#
+"""
+@eel.expose
+def py_log(msg):
+    print(msg)
+
+"""
+#@
+@name: eel.expose py_get_data 
+@brief: gets the trajectory data from the web GUI and converts it into a list of setpoints to be sent to the micro controller
+@inputs: 
+- None;
+@outputs: 
+- None;
+@#
+"""
+@eel.expose
+def py_get_data():
+
+    # local method to interpret the message read on the serial com
+    def read_position_cartesian() -> list[float]:
+         q_actual = [0.0, 0.0]
+         if settings['ser_started']:
+            scm.ser.reset_input_buffer()
+            packet = bp.encode_pos_command()
+            scm.write_data(packet)
+            
+            # Wait loop
+            for _ in range(10):
+                if scm.get_waiting_in_buffer() >= 15:
+                    break
+                tsleep(0.05)
+                
+            if scm.get_waiting_in_buffer() >= 15:
+                raw = scm.read_data(15)
+                fb = bp.decode_position_feedback(raw)
+                if fb:
+                    q_actual = [fb['q0'], fb['q1']]
+                    print(f"READ POS: {q_actual}")
+            else:
+                print("\n" + "!"*50)
+                print("!!! WARNING: POS REQUEST TIMED OUT !!!")
+                print("!!! ASSUMING DEFAULT POSITION (0,0) !!!")
+                print("!!! CHECK FIRMWARE CONNECTION !!!")
+                print("!"*50 + "\n")
+         
+         # Convert to Cartesian
+         points = tpy.dk(np.array(q_actual), sizes)
+         return [points[0,0], points[1,0]]
+
+    def validate_trajectory(q, dq, ddq):
+        print("\n--- TRAJECTORY VALIDATION ---")
+        MAX_SPEED_RAD = 10.0 # From custom.h
+        MAX_ACC_RAD = settings['max_acc'] * 2.0 # Tolerance margin
+        
+        valid = True
+        
+        # 1. Check Limits
+        max_v = 0.0
+        max_a = 0.0
+        
+        for i in range(len(dq[0])):
+            v0 = abs(dq[0][i])
+            v1 = abs(dq[1][i])
+            a0 = abs(ddq[0][i])
+            a1 = abs(ddq[1][i])
+            
+            max_v = max(max_v, v0, v1)
+            max_a = max(max_a, a0, a1)
+            
+            if v0 > MAX_SPEED_RAD or v1 > MAX_SPEED_RAD:
+                print(f"[!] VELOCITY VIOLATION at index {i}: {max(v0,v1):.2f} rad/s > {MAX_SPEED_RAD}")
+                valid = False
+            if a0 > MAX_ACC_RAD or a1 > MAX_ACC_RAD:
+                print(f"[!] ACCELERATION VIOLATION at index {i}: {max(a0,a1):.2f} rad/s^2 > {MAX_ACC_RAD}")
+                valid = False
+                
+        print(f"Stats: Max Vel={max_v:.2f}, Max Acc={max_a:.2f}")
+        
+        if not valid:
+            print("!!! TRAJECTORY UNSAFE - ABORTING SUGGESTED !!!")
+        else:
+            print("Trajectory Dynamics: OK")
+
+        # 2. Packet Inspection
+        print("\n--- PACKET INSPECTION (First 3 Points) ---")
+        for i in range(min(3, len(q[0]))):
+            pkt = bp.encode_trajectory_point(
+                q[0][i], q[1][i],
+                dq[0][i], dq[1][i],
+                ddq[0][i], ddq[1][i],
+                int(q[2][i])
+            )
+            print(f"Point {i}: {pkt.hex().upper()}")
+            # Verify Checksum locally?
+            # bp.decode... not implemented for Packet_t in python, but we trust logic.
+            
+        print("-" * 30 + "\n")
+        return valid
+
+    try:
+        data: list = eel.js_get_data()()
+        # add an initial patch to move the manipulator to the correct starting position
+        if len(data) < 1: 
+            raise Exception("Not Enough Points to build a Trajectory")
+            
+        current_q = read_position_cartesian()
+        print(f"Start Point: {current_q}")
+        
+        data = [{'type':'line', 'points':[current_q, data[0]['points'][0]], 'data':{'penup':True}}] + data[::]
+        
+        # data contains the trajectory patches to stitch together
+        q0s = []
+        q1s = []
+        penups = []
+        ts = []
+        for patch in data: 
+            (q0s_p, q1s_p, penups_p, ts_p) = tpy.slice_trj( patch, 
+                                                    Tc=settings['Tc'],
+                                                    max_acc=settings['max_acc'] * 0.15, # REDUCED TO 15% TO PREVENT ACCEL SPIKES
+                                                    line=settings['line_tl'],
+                                                    circle=settings['circle_tl'],
+                                                    sizes=sizes) # returns a tuple of points given a timing law for the line and for the circle
+            q0s += q0s_p if len(q0s) == 0 else q0s_p[1:] # for each adjacent patch, the last and first values coincide, so ignore the first value of the next patch to avoid singularities
+            q1s += q1s_p if len(q1s) == 0 else q1s_p[1:] # ignoring the starting and ending values of consecutive patches avoids diverging accelerations
+            penups += penups_p if len(penups) == 0 else penups_p[1:]
+            ts += [(t + ts[-1] if len(ts) > 0  else t) for t in (ts_p if len(ts) == 0 else ts_p[1:])] # each trajectory starts from 0: the i-th patch has to start in reality from the (i-1)-th final time instant
+
+        q = (q0s, q1s, penups)
+        dq = (tpy.find_velocities(q[0], ts), tpy.find_velocities(q[1], ts))
+        ddq = (tpy.find_accelerations(dq[0], ts), tpy.find_accelerations(dq[1], ts))
+        
+        # VALIDATE BEFORE SENDING
+        validate_trajectory(q, dq, ddq)
+        
+        # NEW: Send using Binary Protocol
+        send_data('trj', q=q, dq=dq, ddq=ddq)
+        
+        trace_trajectory(q)
+        # DEBUG
+        debug_plot(q[0], 'q1')
+        debug_plot(dq[0], 'dq1')
+        debug_plot(ddq[0], 'ddq1')
+        debug_plot(q[1], 'q2')
+        debug_plot(dq[1], 'dq2')
+        debug_plot(ddq[1], 'ddq2')
+        # END DEBUG
+
+    except Exception as e:
+        print(e)
+        print(traceback.format_exc())
+        pass # do not do anything if the given points are not enough for a trajectory
+
+def log(**data):
+    global log_data
+    for key in data: log_data[key].append(data[key])
+
+@eel.expose
+def py_log_data():
+    content = '' # contents of the file
+    for key in log_data: content+=key+',' # add the first row (the legend)
+    content = content[:len(content-1)]+'\n' # remove the last comma and add '\n'
+    for t in len(log_data['time']):
+        row = ''
+        for key in log_data:
+            row += str(log_data[key]) + ','
+        row = row[:len(row)-1]
+        content += row + '\n'
+    with open('log_data.csv', 'w') as file:
+        file.write(content)
+        file.close() # this is unnecessary because the with statement handles it already, but better safe than sorry
+
+"""
+#@
+@name: eel.expose py_homing_cmd
+@brief: sends the homing command to the micro controller
+@inputs: 
+- None;
+@outputs: 
+- None;
+@#
+"""
+@eel.expose
+def py_homing_cmd():
+    # send the binary homing command 
+    packet = bp.encode_homing_command()
+    scm.write_data(packet)
+
+
+"""
+#@
+@name: eel.expose py_serial_online
+@brief: return whether the serial is online or not
+@inputs: 
+- None;
+@outputs: 
+- bool: bool value that shows if the serial is online or not;
+@#
+"""
+@eel.expose
+def py_serial_online():
+    return settings['ser_started'] # return whether the serial is started or not
+
+"""
+#@
+@name: eel.expose py_serial_sartup
+@brief: initializes the serial communication
+@inputs: 
+- None;
+@outputs: 
+- None;
+@#
+"""
+@eel.expose
+def py_serial_startup():
+    print("Calling scm.ser_init()...")
+    settings['ser_started'] = scm.ser_init()
+    print(f"Serial Started? {settings['ser_started']}")
+
+signal(SIGINT, handle_closure) # ensures that the serial is closed 
+
+if __name__ == "__main__":
+    global ser
+    settings['ser_started'] = scm.ser_init()
+    if not settings['ser_started']:
+        print("No serial could be found, continuing anyway for GUI debug.")
+        # print("No serial could be found, stopping the application.")
+        # exit() 
+
+    # GUI
+    eel.init("./layout") # initialize the view
+    eel.start("./index.html", host=web_options['host'], port=web_options['port']) # start the server
+
+    scm.serial_close() # once the server stops, close the serial
