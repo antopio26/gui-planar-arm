@@ -11,8 +11,9 @@ const penup_btn = document.getElementById('penup-btn'); // pen-up button
 const homing_btn = document.getElementById('homing-btn'); // homing button
 const repeatable_btn = document.getElementById('repeatable-btn'); // repeatable trajectory button
 var points = []; // list of points -> end effector coordinates
+var sent_points = []; // list of points already sent to the backend
 var circle_definition = []; // points needed to define a circle (radius and arc)
-var man, traj; // manipulator and trajectory instance
+var man, traj, sent_traj; // manipulator and trajectory instance
 var tool = line_tool; // currently used tool
 var penup = false; // pen-up boolean
 var dom_mouseX, dom_mouseY; // mouse position on canvas
@@ -51,6 +52,7 @@ function main() {
     eel.py_serial_online()(serial_online); // check if the serial is online
     man = new Manipulator([-Math.PI/2, -Math.PI/2], settings); // create a new manipulator instance
     traj = new Trajectory(); // create a new trajectory object
+    sent_traj = new Trajectory(); // create a new trajectory object for sent data
     draw_loop(); // start the draw loop
 }
 
@@ -95,8 +97,14 @@ function js_get_data() {
         };
         temp.push(to_send);
     }
+    
+    // Move current data to sent buffers
+    sent_points = points;
+    sent_traj.data = traj.data;
+    
     points = []; //empty the array
-    traj.reset(); // reset the trajectory
+    traj = new Trajectory(); // reset the trajectory
+    
     draw_background();
     return temp; // return to python the sliced trajectory data
 }
@@ -262,6 +270,13 @@ function handle_input(e) {
     if(x <input_canvas.width/2) return;
     // if the point is outside the outer circumference, ignore it
     if(Math.pow(x-settings.origin.x, 2)+Math.pow(y-settings.origin.y, 2) > Math.pow(input_canvas.height/2,2)) return;
+    
+    // Clear sent data if starting new drawing
+    if (points.length == 0 && sent_points.length > 0) {
+        sent_points = [];
+        sent_traj.reset();
+    }
+
     var n = points.length;
     if(tool == line_tool){
         circle_definition = []; // empty the circle_definition array to avoid having problems when the circle tool is selected afterwards
@@ -383,8 +398,15 @@ function circle_tool(){
 
 function draw_loop(){
     draw_background();
+    
+    // Draw sent data (ghost)
+    for(var p of sent_points) draw_point(p.relative['x'], p.relative['y']);
+    sent_traj.draw(ctx);
+
+    // Draw current data
     for(var p of points) draw_point(p.relative['x'], p.relative['y']);
     traj.draw(ctx);
+    
     man.draw_pose(ctx);
     man.draw_traces(ctx) // -> slows down the animation a lot
     // draw the ui
