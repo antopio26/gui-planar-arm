@@ -6,6 +6,7 @@ from time import sleep as tsleep, time
 from math import cos, sin, tan, pi
 from struct import pack, unpack
 from binascii import unhexlify
+import threading
 
 from sys import stderr # standard error stream
 from signal import signal, SIGINT # close the serial even if the server is forced to close
@@ -52,6 +53,71 @@ log_data = {
 }
 
 web_options = {'host':'localhost', 'port':6969} # web server setup
+
+# Global state for firmware feedback
+firmware_state = {
+    'q0': 0.0,
+    'q1': 0.0,
+    'buffer_level': 0,
+    'last_update': 0
+}
+
+# Global variable to store the last known position (joint space)
+last_known_q = [0.0, 0.0]
+
+def serial_monitor():
+    print("Starting Serial Monitor Thread...")
+    last_gui_update = 0
+    GUI_UPDATE_INTERVAL = 0.05 # Limit updates to ~20Hz
+
+    while True:
+        if settings['ser_started']:
+            try:
+                # Check for feedback (Robust reading)
+                # Process ALL available packets to avoid lag
+                while scm.get_waiting_in_buffer() >= 3:
+                    b1 = scm.read_data(1)
+                    if b1 and b1[0] == bp.START_BYTE_1:
+                        b2 = scm.read_data(1)
+                        if b2 and b2[0] == bp.START_BYTE_2:
+                            # Header found
+                            b_type = scm.read_data(1)
+                            if b_type:
+                                if b_type[0] == bp.RESP_POS:
+                                    payload = scm.read_data(12)
+                                    if payload and len(payload) == 12:
+                                        full_packet = b1 + b2 + b_type + payload
+                                        feedback = bp.decode_feedback(full_packet)
+                                        if feedback and feedback['type'] == bp.RESP_POS:
+                                            firmware_state['q0'] = feedback['q0']
+                                            firmware_state['q1'] = feedback['q1']
+                                            firmware_state['last_update'] = time()
+                                elif b_type[0] == bp.RESP_STATUS:
+                                    payload = scm.read_data(5)
+                                    if payload and len(payload) == 5:
+                                        full_packet = b1 + b2 + b_type + payload
+                                        feedback = bp.decode_feedback(full_packet)
+                                        if feedback and 'buffer_level' in feedback:
+                                            firmware_state['buffer_level'] = feedback['buffer_level']
+                                            # print(f"MONITOR: Buffer Level = {feedback['buffer_level']}")
+                    else:
+                        # If not a start byte, consume it to realign
+                        pass
+                
+                # Update GUI with current position
+                if time() - last_gui_update > GUI_UPDATE_INTERVAL:
+                    # Send current firmware state to GUI
+                    # We use a try-except block for the eel call to avoid crashing the thread if eel is not ready
+                    try:
+                        eel.js_draw_pose([firmware_state['q0'], firmware_state['q1']])
+                    except:
+                        pass
+                    last_gui_update = time()
+
+            except Exception as e:
+                print(f"Serial Monitor Error: {e}")
+        
+        tsleep(0.005) # Fast polling
 
 def print_error(*args, **kwargs):
     print(*args, file=stderr, **kwargs)
@@ -157,13 +223,8 @@ def send_data(msg_type: str, **data):
                 # IMPORTANT: Since we don't have the real feedback yet, we conservatively pause 
                 # to let the firmware consume points.
                 
-                # Check for feedback (Non-blocking check)
-                if scm.get_waiting_in_buffer() > 8:
-                    raw_feedback = scm.read_data(8)
-                    feedback = bp.decode_feedback(raw_feedback)
-                    if feedback:
-                        print(f"Firmware Feedback: Buffer Level = {feedback['buffer_level']}")
-                        # Use this to throttle if needed
+                # Feedback is now handled by the background thread (serial_monitor)
+                # We can check firmware_state if needed for flow control
                 
                 # Send next batch
                 points_to_send = 0
@@ -246,30 +307,20 @@ def py_get_data():
 
     # local method to interpret the message read on the serial com
     def read_position_cartesian() -> list[float]:
-         q_actual = [0.0, 0.0]
+         global last_known_q
+         q_actual = last_known_q[:]
          if settings['ser_started']:
             scm.ser.reset_input_buffer()
             packet = bp.encode_pos_command()
             scm.write_data(packet)
             
-            # Wait loop
-            for _ in range(10):
-                if scm.get_waiting_in_buffer() >= 15:
-                    break
-                tsleep(0.05)
-                
-            if scm.get_waiting_in_buffer() >= 15:
-                raw = scm.read_data(15)
-                fb = bp.decode_position_feedback(raw)
-                if fb:
-                    q_actual = [fb['q0'], fb['q1']]
-                    print(f"READ POS: {q_actual}")
-            else:
-                print("\n" + "!"*50)
-                print("!!! WARNING: POS REQUEST TIMED OUT !!!")
-                print("!!! ASSUMING DEFAULT POSITION (0,0) !!!")
-                print("!!! CHECK FIRMWARE CONNECTION !!!")
-                print("!"*50 + "\n")
+            # Wait for the background thread to pick up the response
+            # We give it a bit of time (e.g. 100ms)
+            tsleep(0.1)
+            
+            # Read from global state
+            q_actual = [firmware_state['q0'], firmware_state['q1']]
+            print(f"READ POS (from state): {q_actual}")
          
          # Convert to Cartesian
          points = tpy.dk(np.array(q_actual), sizes)
@@ -363,6 +414,11 @@ def py_get_data():
         # NEW: Send using Binary Protocol
         send_data('trj', q=q, dq=dq, ddq=ddq)
         
+        # Update last known position
+        global last_known_q
+        if len(q0s) > 0:
+             last_known_q = [q0s[-1], q1s[-1]]
+        
         trace_trajectory(q)
         # DEBUG
         debug_plot(q[0], 'q1')
@@ -413,6 +469,10 @@ def py_homing_cmd():
     packet = bp.encode_homing_command()
     print(f"Homing packet sent: {packet}")
     scm.write_data(packet)
+    
+    # Reset last known position to home (0,0)
+    global last_known_q
+    last_known_q = [0.0, 0.0]
 
 
 """
@@ -450,6 +510,11 @@ signal(SIGINT, handle_closure) # ensures that the serial is closed
 if __name__ == "__main__":
     global ser
     settings['ser_started'] = scm.ser_init()
+    
+    # Start Serial Monitor Thread
+    monitor_thread = threading.Thread(target=serial_monitor, daemon=True)
+    monitor_thread.start()
+    
     if not settings['ser_started']:
         print("No serial could be found, continuing anyway for GUI debug.")
         # print("No serial could be found, stopping the application.")
