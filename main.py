@@ -344,7 +344,7 @@ def py_get_data():
         for patch in data: 
             (q0s_p, q1s_p, penups_p, ts_p) = tpy.slice_trj( patch, 
                                                     Tc=settings['Tc'],
-                                                    max_acc=settings['max_acc'] * 0.15, # REDUCED TO 15% TO PREVENT ACCEL SPIKES
+                                                    max_acc=settings['max_acc'], # * 0.15, # REDUCED TO 15% TO PREVENT ACCEL SPIKES
                                                     line=settings['line_tl'],
                                                     circle=settings['circle_tl'],
                                                     sizes=sizes) # returns a tuple of points given a timing law for the line and for the circle
@@ -411,6 +411,7 @@ def py_log_data():
 def py_homing_cmd():
     # send the binary homing command 
     packet = bp.encode_homing_command()
+    print(f"Homing packet sent: {packet}")
     scm.write_data(packet)
 
 
