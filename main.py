@@ -62,6 +62,14 @@ firmware_state = {
     'last_update': 0
 }
 
+# Recording State
+recording_active = False
+rec_data = {
+    'q0': [],
+    'q1': [],
+    't': []
+}
+
 # Global variable to store the last known position (joint space)
 last_known_q = [0.0, 0.0]
 
@@ -92,6 +100,11 @@ def serial_monitor():
                                             firmware_state['q0'] = feedback['q0']
                                             firmware_state['q1'] = feedback['q1']
                                             firmware_state['last_update'] = time()
+                                            
+                                            if recording_active:
+                                                rec_data['q0'].append(feedback['q0'])
+                                                rec_data['q1'].append(feedback['q1'])
+                                                rec_data['t'].append(time())
                                 elif b_type[0] == bp.RESP_STATUS:
                                     payload = scm.read_data(5)
                                     if payload and len(payload) == 5:
@@ -154,6 +167,28 @@ def debug_plotXY(x, y, name="image"):
     plt.savefig('images/'+name+'.png')
     plt.close()
 
+def plot_recorded_data():
+    global rec_data
+    if not rec_data['t']:
+        print("No data recorded to plot.")
+        return
+
+    plt.figure()
+    # Normalize time to start at 0
+    t0 = rec_data['t'][0]
+    t = [ti - t0 for ti in rec_data['t']]
+    
+    plt.plot(t, rec_data['q0'], label='q0_actual')
+    plt.plot(t, rec_data['q1'], label='q1_actual')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Joint Position (rad)')
+    plt.title('Recorded Joint Trajectory')
+    plt.legend()
+    plt.grid(visible=True)
+    plt.savefig('images/recorded_trajectory.png')
+    plt.close()
+    print("Recorded trajectory plot saved at images/recorded_trajectory.png")
+
 
 def d2h(d: float) -> str: # double to hex
     # < = little endian
@@ -196,6 +231,10 @@ def send_data(msg_type: str, **data):
             # --- EXECUTION ENGINE ---
             
             # 1. Fill the buffer initially (Pre-roll)
+            global recording_active, rec_data
+            rec_data = {'q0': [], 'q1': [], 't': []} # Clear buffer
+            recording_active = True
+            
             sent_count = 0
             initial_fill = min(num_points, FIRMWARE_BUFFER_SIZE - 5)
             
@@ -253,6 +292,9 @@ def send_data(msg_type: str, **data):
                     print(f"Progress: {sent_count}/{num_points}")
 
             print(f"TRJ SENT COMPLETE: {num_points} points")
+            
+            recording_active = False
+            plot_recorded_data()
 
 """
 #@
