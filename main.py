@@ -179,31 +179,50 @@ def plot_recorded_data(des_q0, des_q1, Tc):
     # 1. Actual Time Axis
     t0 = rec_data['t'][0]
     t_act = np.array([ti - t0 for ti in rec_data['t']])
+    q0_act = np.array(rec_data['q0'])
     
     # 2. Desired Time Axis
     t_des = np.array([i * Tc for i in range(len(des_q0))])
+    q0_des = np.array(des_q0)
 
-    # 3. Alignment Logic (Cross-Correlation)
-    # Interpolate actual q0 onto desired time grid for correlation
+    # 3. Alignment Logic (Start/End Scaling)
     try:
-        if len(t_act) > 10: # Ensure enough points
-            q0_act_interp = np.interp(t_des, t_act, rec_data['q0'])
+        # Helper to find active duration based on velocity
+        def get_active_bounds(t, q, threshold=0.05):
+            # Calculate velocity (simple difference)
+            vel = np.gradient(q) 
+            # Normalize velocity to find significant movement
+            max_vel = np.max(np.abs(vel))
+            if max_vel == 0: return 0, len(t)-1
             
-            # Compute cross-correlation
-            # q0_act_interp is "signal", des_q0 is "reference"
-            # Remove mean to focus on shape
-            signal = q0_act_interp - np.mean(q0_act_interp)
-            reference = np.array(des_q0) - np.mean(des_q0)
+            is_moving = np.abs(vel) > max_vel * threshold
+            indices = np.where(is_moving)[0]
             
-            corr = np.correlate(signal, reference, mode='full')
-            lag_idx = np.argmax(corr) - (len(reference) - 1)
+            if len(indices) < 2:
+                return 0, len(t)-1
             
-            lag_time = lag_idx * Tc
-            print(f"Detected Temporal Lag: {lag_time:.4f} s")
+            return indices[0], indices[-1]
+
+        # Find bounds in indices
+        idx_s_des, idx_e_des = get_active_bounds(t_des, q0_des)
+        idx_s_act, idx_e_act = get_active_bounds(t_act, q0_act)
+        
+        # Get times
+        t_s_des, t_e_des = t_des[idx_s_des], t_des[idx_e_des]
+        t_s_act, t_e_act = t_act[idx_s_act], t_act[idx_e_act]
+        
+        dur_des = t_e_des - t_s_des
+        dur_act = t_e_act - t_s_act
+        
+        if dur_act > 0.1: # Avoid div by zero
+            scale = dur_des / dur_act
+            shift = t_s_des - (t_s_act * scale)
             
-            # Correct the time axis for actual data
-            # If lag is positive, signal is delayed (to the right). We subtract lag to move it left.
-            t_act = t_act - lag_time
+            print(f"Aligning: Scale={scale:.4f}, Shift={shift:.4f}")
+            
+            # Apply transformation
+            t_act = t_act * scale + shift
+            
     except Exception as e:
         print(f"Alignment failed: {e}")
 
@@ -267,6 +286,7 @@ def send_data(msg_type: str, **data):
             global recording_active, rec_data
             rec_data = {'q0': [], 'q1': [], 't': []} # Clear buffer
             recording_active = True
+            start_time = time()
             
             sent_count = 0
             initial_fill = min(num_points, FIRMWARE_BUFFER_SIZE - 5)
@@ -325,6 +345,15 @@ def send_data(msg_type: str, **data):
                     print(f"Progress: {sent_count}/{num_points}")
 
             print(f"TRJ SENT COMPLETE: {num_points} points")
+            
+            # Wait for the trajectory to finish physically
+            total_duration = num_points * settings['Tc']
+            elapsed = time() - start_time
+            remaining = total_duration - elapsed
+            
+            if remaining > 0:
+                print(f"Waiting for trajectory to finish: {remaining:.2f}s")
+                tsleep(remaining + 0.5) # Add 0.5s margin
             
             recording_active = False
             # Pass desired trajectory data to plotter
