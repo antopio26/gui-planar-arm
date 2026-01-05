@@ -241,6 +241,38 @@ def plot_recorded_data(des_q0, des_q1, Tc):
     plt.close('all') # CLEANUP
     print("Recorded trajectory plot saved at images/recorded_trajectory.png")
 
+    # 5. XY Plotting
+    plt.figure()
+    
+    # Compute Desired XY
+    x_des = []
+    y_des = []
+    for q0, q1 in zip(des_q0, des_q1):
+        pos = tpy.dk(np.array([q0, q1]))
+        x_des.append(pos[0][0])
+        y_des.append(pos[1][0])
+        
+    # Compute Actual XY
+    x_act = []
+    y_act = []
+    for q0, q1 in zip(rec_data['q0'], rec_data['q1']):
+        pos = tpy.dk(np.array([q0, q1]))
+        x_act.append(pos[0][0])
+        y_act.append(pos[1][0])
+        
+    plt.plot(x_des, y_des, '--', label='Desired Path', alpha=0.7)
+    plt.plot(x_act, y_act, label='Actual Path', linewidth=1.5)
+    
+    plt.xlabel('X Position (m)')
+    plt.ylabel('Y Position (m)')
+    plt.title('Path Tracking: Desired vs Actual')
+    plt.legend()
+    plt.grid(visible=True)
+    plt.axis('equal') # Ensure aspect ratio is correct for spatial path
+    plt.savefig('images/recorded_xy.png')
+    plt.close('all')
+    print("Recorded XY path plot saved at images/recorded_xy.png")
+
 
 def d2h(d: float) -> str: # double to hex
     # < = little endian
