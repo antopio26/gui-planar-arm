@@ -314,16 +314,45 @@ function handle_serial() {
 
 function repeatable_trajectory(){
     /*
-    Simply adds two points with the line tool so that the trajectory is always repeatable.
+    Traiettoria simmetrica a 10 punti con profilo curvo ottimizzato
     */
     tool = line_tool;
-    points.push(new Point(input_canvas.width,input_canvas.height/2, settings));
-    points.push(new Point(input_canvas.width/2,input_canvas.height, settings));
+    points = []; // Reset points array
+    
+    var w = input_canvas.width;
+    var h = input_canvas.height;
+    var midH = h / 2;
+
+    // Definiamo le coordinate X e Y per la metà superiore (5 punti)
+    // I punti sono pensati per creare una curva morbida che rientra verso il centro
+    var topPoints = [
+        {x: w * 0.5,  y: 0},            // Punto 1: Cima nord
+        {x: w * 0.65, y: h * 0.1},      // Punto 2
+        {x: w * 0.8,  y: h * 0.22},     // Punto 3
+        {x: w * 0.92, y: h * 0.35},     // Punto 4
+        {x: w,        y: midH}          // Punto 5: Estremo est (centro verticale)
+    ];
+
+    // Aggiungiamo i punti della metà superiore
+    for (var i = 0; i < topPoints.length; i++) {
+        points.push(new Point(topPoints[i].x, topPoints[i].y, settings));
+    }
+
+    // Generiamo i restanti 5 punti per riflessione simmetrica (totale 10)
+    // Partiamo dal punto subito dopo il centro per evitare duplicati
+    for (var i = topPoints.length - 2; i >= 0; i--) {
+        var reflectedY = midH + (midH - topPoints[i].y);
+        points.push(new Point(topPoints[i].x, reflectedY, settings));
+    }
+
+    // Disegno della traiettoria
     var n = points.length;
-    traj.add_line(points[n-2], points[n-1], false);
+    for(var i = 1; i < n; i++){
+        traj.add_line(points[i-1], points[i], false);
+    }
+    
     man.reset_trace();
 }
-
 /*
 #@
 @name: line_tool
