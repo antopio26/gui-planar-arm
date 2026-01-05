@@ -167,26 +167,35 @@ def debug_plotXY(x, y, name="image"):
     plt.savefig('images/'+name+'.png')
     plt.close()
 
-def plot_recorded_data():
+def plot_recorded_data(des_q0, des_q1, Tc):
     global rec_data
     if not rec_data['t']:
         print("No data recorded to plot.")
         return
 
+    plt.close('all') # FORCE CLOSE ALL PREVIOUS FIGURES
     plt.figure()
-    # Normalize time to start at 0
-    t0 = rec_data['t'][0]
-    t = [ti - t0 for ti in rec_data['t']]
     
-    plt.plot(t, rec_data['q0'], label='q0_actual')
-    plt.plot(t, rec_data['q1'], label='q1_actual')
+    # 1. Actual Time Axis
+    t0 = rec_data['t'][0]
+    t_act = [ti - t0 for ti in rec_data['t']]
+    
+    # 2. Desired Time Axis
+    t_des = [i * Tc for i in range(len(des_q0))]
+
+    # 3. Plotting
+    plt.plot(t_des, des_q0, '--', label='q0_des', alpha=0.7)
+    plt.plot(t_des, des_q1, '--', label='q1_des', alpha=0.7)
+    plt.plot(t_act, rec_data['q0'], label='q0_act', linewidth=1.5)
+    plt.plot(t_act, rec_data['q1'], label='q1_act', linewidth=1.5)
+    
     plt.xlabel('Time (s)')
     plt.ylabel('Joint Position (rad)')
-    plt.title('Recorded Joint Trajectory')
+    plt.title('Trajectory Tracking: Desired vs Actual')
     plt.legend()
     plt.grid(visible=True)
     plt.savefig('images/recorded_trajectory.png')
-    plt.close()
+    plt.close('all') # CLEANUP
     print("Recorded trajectory plot saved at images/recorded_trajectory.png")
 
 
@@ -294,7 +303,8 @@ def send_data(msg_type: str, **data):
             print(f"TRJ SENT COMPLETE: {num_points} points")
             
             recording_active = False
-            plot_recorded_data()
+            # Pass desired trajectory data to plotter
+            plot_recorded_data(data['q'][0], data['q'][1], settings['Tc'])
 
 """
 #@
