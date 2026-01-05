@@ -178,12 +178,36 @@ def plot_recorded_data(des_q0, des_q1, Tc):
     
     # 1. Actual Time Axis
     t0 = rec_data['t'][0]
-    t_act = [ti - t0 for ti in rec_data['t']]
+    t_act = np.array([ti - t0 for ti in rec_data['t']])
     
     # 2. Desired Time Axis
-    t_des = [i * Tc for i in range(len(des_q0))]
+    t_des = np.array([i * Tc for i in range(len(des_q0))])
 
-    # 3. Plotting
+    # 3. Alignment Logic (Cross-Correlation)
+    # Interpolate actual q0 onto desired time grid for correlation
+    try:
+        if len(t_act) > 10: # Ensure enough points
+            q0_act_interp = np.interp(t_des, t_act, rec_data['q0'])
+            
+            # Compute cross-correlation
+            # q0_act_interp is "signal", des_q0 is "reference"
+            # Remove mean to focus on shape
+            signal = q0_act_interp - np.mean(q0_act_interp)
+            reference = np.array(des_q0) - np.mean(des_q0)
+            
+            corr = np.correlate(signal, reference, mode='full')
+            lag_idx = np.argmax(corr) - (len(reference) - 1)
+            
+            lag_time = lag_idx * Tc
+            print(f"Detected Temporal Lag: {lag_time:.4f} s")
+            
+            # Correct the time axis for actual data
+            # If lag is positive, signal is delayed (to the right). We subtract lag to move it left.
+            t_act = t_act - lag_time
+    except Exception as e:
+        print(f"Alignment failed: {e}")
+
+    # 4. Plotting
     plt.plot(t_des, des_q0, '--', label='q0_des', alpha=0.7)
     plt.plot(t_des, des_q1, '--', label='q1_des', alpha=0.7)
     plt.plot(t_act, rec_data['q0'], label='q0_act', linewidth=1.5)
