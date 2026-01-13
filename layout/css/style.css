@@ -1,0 +1,168 @@
+@import 'variables.css';
+
+/* Reset & Base */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Layout */
+.app-container {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    height: 100%;
+    width: 100%;
+}
+
+/* Sidebar */
+.sidebar {
+    background-color: var(--bg-secondary);
+    padding: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+    border-right: 1px solid var(--bg-tertiary);
+    z-index: 10;
+    box-shadow: var(--shadow-md);
+}
+
+.brand {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--accent-color);
+    margin-bottom: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.group-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    margin-bottom: var(--spacing-xs);
+}
+
+/* Main Content (Canvas) */
+.main-content {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--bg-primary);
+    overflow: auto;
+}
+
+canvas {
+    background-color: var(--bg-secondary);
+    /* Dark background */
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-lg);
+}
+
+/* Components */
+.btn {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--bg-tertiary);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+}
+
+.btn:hover {
+    background-color: var(--bg-tertiary);
+    /* Lighten slightly in practice, utilizing brightness filter */
+    filter: brightness(1.2);
+    border-color: var(--text-muted);
+}
+
+.btn.primary {
+    background-color: var(--accent-color);
+    color: var(--bg-primary);
+    border: none;
+    font-weight: 700;
+}
+
+.btn.primary:hover {
+    background-color: var(--accent-hover);
+    filter: none;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn.active {
+    border-color: var(--accent-color);
+    background-color: var(--accent-dim);
+    color: var(--accent-color);
+}
+
+/* Status Indicator */
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    padding: var(--spacing-sm);
+    background: var(--bg-tertiary);
+    border-radius: var(--border-radius-md);
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    background-color: var(--danger-color);
+    border-radius: 50%;
+    transition: background-color var(--transition-normal);
+    box-shadow: 0 0 5px rgba(255, 68, 68, 0.4);
+}
+
+.status-dot.online {
+    background-color: var(--success-color);
+    box-shadow: 0 0 5px rgba(0, 200, 81, 0.4);
+}
+
+/* Toasts / Notifications (Optional for future) */
+.notification {
+    position: fixed;
+    bottom: var(--spacing-lg);
+    right: var(--spacing-lg);
+    background: var(--bg-secondary);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--shadow-lg);
+    border-left: 4px solid var(--accent-color);
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all var(--transition-normal);
+}
+
+.notification.show {
+    transform: translateY(0);
+    opacity: 1;
+}

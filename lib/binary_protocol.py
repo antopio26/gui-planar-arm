@@ -8,13 +8,13 @@ START_BYTE_2 = 0x5A
 CMD_TRAJECTORY = 0x01
 CMD_HOMING = 0x02
 CMD_STOP = 0x03
-CMD_POS  = 0x04
+CMD_POS = 0x04
 
 # Response IDs
 RESP_ACK = 0xAA
 RESP_NACK = 0xFF
 RESP_STATUS = 0x01
-RESP_POS    = 0x02
+RESP_POS = 0x02
 
 def calculate_crc32(data: bytes) -> int:
     import zlib

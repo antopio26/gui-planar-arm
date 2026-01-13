@@ -1,28 +1,71 @@
 <!DOCTYPE html>
 <html lang="en">
-<title>Robotics M1 Project</title>
 
 <head>
-    <link rel="stylesheet" href="/style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planar Arm Control</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/style.css" />
+
+    <!-- Scripts -->
     <script type="text/javascript" src="/eel.js"></script>
-    <script type="text/javascript" src="/cnv.js" defer></script>
-    <script type="text/javascript" src="/manipulator.js" defer></script>
-    <script type="text/javascript" src="/main.js" defer></script>
-    
-    <!--<script type="text/javascript" src="/p5.min.js" defer></script> -->
+    <script type="module" src="js/main.js" defer></script>
 </head>
 
 <body>
-    <!--<h1>Hello, Trajectory Test :D</h1>-->
-    <canvas id="input_canvas" width="700" , height="700"></canvas>
-    <button class="button-styled" id="line-btn">Line</button>
-    <button class="button-styled" id="circle-btn">Circle</button>
-    <button class="button-styled" id="penup-btn">Pen UP</button><br>
-    <button id="send_data_btn" class="button-styled">SEND DATA</button><br>
-    <div class="status-led">Serial Status: <span class="status offline" id="status-dot"></span></div><br>
-    <button id="start-serial-btn" class="button-styled">Start Serial Com</button>
-    <button id="homing-btn" class="button-styled">Homing</button>
-    <button id="repeatable-btn" class="button-styled">Repeatable Trj.</button><br>
+    <div class="app-container">
+        <!-- Sidebar Controls -->
+        <aside class="sidebar">
+            <div class="brand">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path
+                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                    </path>
+                </svg>
+                RoboControl
+            </div>
+
+            <div class="control-group">
+                <div class="group-title">Connection</div>
+                <div class="status-indicator">
+                    <div id="status-dot" class="status-dot"></div>
+                    <span id="status-text">Disconnected</span>
+                </div>
+                <button id="start-serial-btn" class="btn">Connect Serial</button>
+            </div>
+
+            <div class="control-group">
+                <div class="group-title">Drawing Tools</div>
+                <button id="line-btn" class="btn active" data-tool="line">Line Tool</button>
+                <button id="circle-btn" class="btn" data-tool="circle">Circle Tool</button>
+                <button id="penup-btn" class="btn">Toggle Pen Up</button>
+            </div>
+
+            <div class="control-group">
+                <div class="group-title">Commands</div>
+                <button id="send-data-btn" class="btn primary">Send Trajectory</button>
+                <button id="homing-btn" class="btn">Homing</button>
+                <button id="repeatable-btn" class="btn">Demo Trajectory</button>
+            </div>
+
+            <div id="console-output" style="margin-top: auto; font-size: 0.8em; color: var(--text-muted);">
+                <!-- Logs can go here -->
+            </div>
+        </aside>
+
+        <!-- Main Canvas Area -->
+        <main class="main-content">
+            <canvas id="input_canvas" width="700" height="700"></canvas>
+        </main>
+    </div>
 </body>
 
 </html>

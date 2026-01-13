@@ -1,0 +1,62 @@
+// api.js - Wraps Eel calls
+
+export const API = {
+    async getSerialStatus() {
+        if (!window.eel) return false;
+        return await window.eel.py_serial_online()();
+    },
+
+    async startSerial() {
+        if (!window.eel) return;
+        await window.eel.py_serial_startup()();
+    },
+
+    async homing() {
+        if (!window.eel) return;
+        await window.eel.py_homing_cmd()();
+    },
+
+    async sendData(payload) {
+        // payload is passed via side-channel in original code?
+        // Original code: eel.py_get_data() calls js_get_data() callback.
+        // We need to maintain this flow or invert it.
+        // Current flow: Frontend calls py_get_data(), which calls js_get_data() synchronously/callback, 
+        // then Python processes the return value of js_get_data.
+        if (!window.eel) return;
+        await window.eel.py_get_data()();
+    },
+
+    // Setup callbacks that Python calls
+    initCallbacks(callbacks) {
+        if (!window.eel) {
+            console.warn("Eel not initialized (mock mode?)");
+            return;
+        }
+
+        window.js_log = (msg) => {
+            console.log("[PY]", msg);
+            if (callbacks.onLog) callbacks.onLog(msg);
+        };
+
+        window.js_draw_pose = (q) => {
+            if (callbacks.onDrawPose) callbacks.onDrawPose(q);
+        };
+
+        window.js_draw_traces = (points) => {
+            if (callbacks.onDrawTraces) callbacks.onDrawTraces(points);
+        }
+
+        // This is complex: Python calls this to GET data.
+        // It expects a synchronous return of the data.
+        window.js_get_data = () => {
+            if (callbacks.onGetData) return callbacks.onGetData();
+            return [];
+        };
+
+        // Explicitly expose them to Eel
+        window.eel.expose(window.js_log, 'js_log');
+        window.eel.expose(window.js_draw_pose, 'js_draw_pose');
+        window.eel.expose(window.js_draw_traces, 'js_draw_traces');
+        window.eel.expose(window.js_get_data, 'js_get_data');
+    }
+};

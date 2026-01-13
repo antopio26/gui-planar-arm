@@ -4,7 +4,7 @@ import serial.tools.list_ports
 
 ser = None # serial object
 
-def ser_init(serial_path:str=None) -> bool:
+def ser_init(serial_path:str) -> bool:
     global ser 
     print("Starting Serial Connection:\n")
     found = False
