@@ -4,7 +4,7 @@ import serial.tools.list_ports
 
 ser = None # serial object
 
-def ser_init(serial_path:str='/dev/tty.usbmodem2103') -> bool:
+def ser_init(serial_path:str) -> bool:
     global ser 
     print("Starting Serial Connection:\n")
     found = False

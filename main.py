@@ -3,7 +3,7 @@ monkey.patch_all()
 
 import eel
 import signal
-from config import SETTINGS, WEB_OPTIONS
+from config import SETTINGS, WEB_OPTIONS, SERIAL_PORT
 from lib import serial_com as scm
 from serial_manager import serial_manager
 import gui_interface # Imports exposed functions
@@ -22,7 +22,7 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, handle_closure)
 
     # Initialize Serial (Try to connect)
-    SETTINGS['ser_started'] = scm.ser_init()
+    SETTINGS['ser_started'] = scm.ser_init(SERIAL_PORT)
     if not SETTINGS['ser_started']:
         print("No serial could be found, continuing anyway for GUI debug.")
 

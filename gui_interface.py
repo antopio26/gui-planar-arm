@@ -4,7 +4,7 @@ import traceback
 from time import sleep
 
 from lib import trajpy as tpy
-from config import SETTINGS, SIZES, MAX_SPEED_RAD, MAX_ACC_TOLERANCE_FACTOR
+from config import SETTINGS, SIZES, MAX_SPEED_RAD, MAX_ACC_TOLERANCE_FACTOR, SERIAL_PORT
 from state import state
 from serial_manager import serial_manager
 from lib import serial_com as scm
@@ -167,6 +167,6 @@ def py_serial_online():
 
 @eel.expose
 def py_serial_startup():
-    print("Calling scm.ser_init()...")
-    SETTINGS['ser_started'] = scm.ser_init()
+    print(f"Calling scm.ser_init({SERIAL_PORT})...")
+    SETTINGS['ser_started'] = scm.ser_init(SERIAL_PORT)
     print(f"Serial Started? {SETTINGS['ser_started']}")
