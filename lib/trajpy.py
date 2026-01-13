@@ -1,14 +1,13 @@
 from math import sqrt,atan2,cos,sin,pi,acos, copysign
 import numpy as np
 from typing import Callable
-#from scipy.interpolate import CubicSpline
 
 point_time = tuple[float, float] # point_time type for type annotation
 function = Callable[[float], float] # function handle type for type annotation
 
 
 
-""" #@
+r""" #@
 @name: time_row
 @brief: computes and returns as a list a row of the vandermont matrix
 @notes: the returned row is actually the one linked to the equation a0t^0 + a1t^1 + a2t^2 + ... + ant^n = 0 => 
@@ -143,14 +142,6 @@ def compose_spline3(q: list[float], ddqm: float = 1.05, dts:list[float]= None) -
         dts = []
         for q1, q0 in zip(q[:len(q)-1], q[1:]):
             dts.append(sqrt(2*pi*abs(q1-q0)/ddqm))
-        dq = cubic_speeds(q, dts) #*0 #cubic_speeds(q, dts)
-        for q0, q1, dq0, dq1, dt in zip(q[:len(q)-1], q[1:], dq[:len(dq)], dq[1:], dts):
-            q0_point = (q0, 0)
-            q1_point = (q1, dt)
-            dq0_point = (dq0, 0)
-            dq1_point = (dq1, dt)
-            polys = spline3([q0_point, q1_point], [dq0_point, dq1_point])
-            trajectory.append((polys, dt))
     return trajectory
 
 
@@ -170,7 +161,7 @@ def cubic_speeds(q: list[float], dts: list[float]) -> list[float]:
     dqs = [(q1-q0)[0] for q0, q1 in zip(q[:len(q)-1], q[1:])]
     ck = lambda k : 3*((dts[k]**2)*dqs[k+1]+ (dts[k+1]**2)*dqs[k])/(dts[k]*dts[k+1])
     
-    print(len(q), len(dts), len(dqs))
+    
     for i in range(len(q)-2):
         A[i, i] += 2*dts[i]
         if i+1 < len(q)-2 : A[i, i+1] = dts[i]
@@ -237,11 +228,6 @@ def trapezoidal(q:list[float], ddqm:float = 1.05, tf: float = None) -> tuple[lis
         tc = tf/2-sqrt((ddqm*tf)**2-4*ddqm*(q[1]-q[0]))/(2*ddqm)
     qc = q[0] + 0.5*ddqm*tc**2
     qb = qc+ddqm*tc*(tf-2*tc)
-    '''
-    first = (np.array([[q[0]],[0],[0.5*ddqm]]).T,tc) # (coefficients, duration)
-    second = (np.array([[qc], [ddqm*tc], [0]]).T, tf-2*tc)
-    third = (np.array([[qb],[ddqm*tc], [-0.5*ddqm]]).T, tc)
-    '''
     first = np.array([[q[0], 0, 0.5*ddqm]])
     second = np.array([[qc, ddqm*tc, 0]])
     third = np.array([[qb, ddqm*tc, -0.5*ddqm]])
@@ -269,16 +255,6 @@ def trapezoidal(q:list[float], ddqm:float = 1.05, tf: float = None) -> tuple[lis
 @outputs: 
 - list[tuple[ndarray, float]] :  list of coefficients/trapezoidal-duration tuples.
 @# """
-'''
-def compose_trapezoidal(q:list[float], ddqm:float = 1.05) -> list[tuple[np.ndarray, float]]:
-    A = []
-    for k in range(len(q)-1):
-        q0 = q[k]
-        q1 = q[k+1]
-        qk = trapezoidal([q0, q1], ddqm)
-        A += qk
-    return A
-'''
 
 def compose_trapezoidal(q:list[float], ddqm:float = 1.05) -> list[tuple[list[function], float]]: #list[tuple[np.ndarray, float]]:
     A = []
@@ -347,8 +323,6 @@ def ik(x:float, y:float, z:float = 0, theta:float = None, sizes:dict[float] = {'
     q2 = 0
     a1 = sizes['l1']
     a2 = sizes['l2']
-    print ("a1 :"+str(a1) +" a2 :"+str (a2))
-    print ("x :"+str(x) +" y:"+str (y))
 
 
     if theta is not None:
@@ -362,7 +336,6 @@ def ik(x:float, y:float, z:float = 0, theta:float = None, sizes:dict[float] = {'
 
 
     q = np.array([[q1,q2,z]]).T
-    print(" q1: "+str(q1) + " q2: "+str(q2))
     return q
 
 """ #@
@@ -621,9 +594,9 @@ def find_velocities(q: list[float], ts: list[float]) -> list[float]:
     for q0, q1, t0, t1 in zip(q[:-1], q[1:], ts[:-1], ts[1:]):
         dq = q1-q0
         dt = t1-t0
-        if dt == 0: print(k, dq) # debug
+        if dt == 0: pass # print(k, dq) # debug
         dqs.append(dq/dt)
-        k+=1 # debug
+        # k+=1 # debug
     return [0]+dqs
 
 """

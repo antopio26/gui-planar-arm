@@ -12,13 +12,25 @@ A Python-based GUI application for controlling a planar robotic arm. This tool p
 
 ## Project Structure
 
-- `main.py`: The entry point of the application. Handles the GUI backend, trajectory generation, and serial communication orchestration.
-- `layout/`: Contains the frontend code (HTML, CSS, JavaScript) for the GUI.
-- `lib/`: Core libraries for the application:
-    - `trajpy.py`: Trajectory generation algorithms and kinematics.
-    - `serial_com.py`: Serial communication wrapper.
-    - `binary_protocol.py`: Implementation of the custom binary protocol for firmware communication.
-- `TEST/`: Unit tests and testing scripts.
+The project has been refactored for better modularity and maintainability.
+
+### Core Components
+- **`main.py`**: The entry point. Initializes the serial manager and launches the GUI.
+- **`config.py`**: Central configuration file for hardware settings, timing, and web server options.
+- **`state.py`**: Thread-safe global state management (`RobotState`) for sharing data between the GUI and serial threads.
+- **`gui_interface.py`**: Contains the logic exposed to the Javascript frontend (Eel callbacks) and trajectory validation.
+- **`serial_manager.py`**: Manages the background serial communication thread and protocol handling.
+- **`plotting.py`**: Unified module for generating debug and performance plots.
+
+### Libraries & Layout
+- **`lib/`**:
+    - `trajpy.py`: Trajectory generation algorithms, kinematics (inverse/direct), and path slicing.
+    - `serial_com.py`: Low-level serial port wrapper.
+    - `binary_protocol.py`: Implementation of the custom binary protocol.
+- **`layout/`**: Frontend resources (HTML, CSS, JavaScript).
+
+### Legacy & Utils
+- **`data_manage.py`**: Utility script for processing raw log files (independent of main app).
 
 ## Installation
 
@@ -30,8 +42,8 @@ A Python-based GUI application for controlling a planar robotic arm. This tool p
 
 2.  **Set up a virtual environment (Recommended):**
     ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+    python -m venv .venv
+    source .venv/bin/activate  # On Windows use `.venv\Scripts\activate`
     ```
 
 3.  **Install dependencies:**
