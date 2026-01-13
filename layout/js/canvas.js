@@ -27,32 +27,37 @@ export class CanvasHandler {
     }
 
     resize() {
-        // Get the display size
         const parent = this.canvas.parentElement;
         const width = parent.clientWidth;
         const height = parent.clientHeight;
 
-        // Add more padding as requested
-        const size = Math.min(width, height) - 60; // Increased margin
+        // Canvas element size (fit container with small margin)
+        const size = Math.min(width, height) - 20;
 
         const dpr = window.devicePixelRatio || 1;
 
-        // Set actual size in memory (scaled to account for extra pixel density)
         this.canvas.width = size * dpr;
         this.canvas.height = size * dpr;
 
-        // Scale the drawing context so everything behaves close to 1:1 units
         this.ctx.scale(dpr, dpr);
 
-        // Set visible size
         this.canvas.style.width = size + 'px';
         this.canvas.style.height = size + 'px';
 
-        // Update state settings for the new dimensions
-        // Note: The app logic relies on canvas dimensions for origin calculation
+        // Internal Padding Logic
+        const padding = 40; // Internal padding in pixels
+        const usableSize = size - (padding * 2);
+        const radius = usableSize / 2;
+
+        // Update Origin to center
         this.state.settings.origin.x = size / 2;
         this.state.settings.origin.y = size / 2;
-        this.state.settings.m_p = (0.328 * 2) / size;
+
+        // Scale: Robot diameter (0.328 * 2) -> Usable Diameter
+        this.state.settings.m_p = (0.328 * 2) / usableSize;
+
+        // Store visual radius for drawing
+        this.workspaceRadius = radius;
     }
 
     handleMouseMove(e) {
@@ -66,18 +71,10 @@ export class CanvasHandler {
         const y = this.mouseY;
         const settings = this.state.settings;
 
-        // Validation: Ignore clicks on left side (reserved?) or outside workspace
-        // Original logic: if(x < width/2) return; -> Removed this restriction? 
-        // Logic: The original code logic was `if(x < input_canvas.width/2) return;`
-        // Let's keep it if the workspace is strictly on the right.
-        // Actually, with the new UI, let's allow drawing anywhere inside the valid workspace radius.
-
-        const width = parseFloat(this.canvas.style.width);
-        const height = parseFloat(this.canvas.style.height);
-
         // Radius check (workspace limit)
         const distSq = Math.pow(x - settings.origin.x, 2) + Math.pow(y - settings.origin.y, 2);
-        const maxRadius = height / 2;
+        const maxRadius = this.workspaceRadius || (this.canvas.height / 2); // Fallback
+
         if (distSq > maxRadius * maxRadius) return;
 
         // Clear sent data if new drawing starts
@@ -87,7 +84,6 @@ export class CanvasHandler {
         }
 
         const currentTool = this.state.tool;
-        const n = this.state.points.length;
 
         if (currentTool === TOOLS.LINE) {
             this.state.circleDefinition = [];
@@ -108,28 +104,6 @@ export class CanvasHandler {
                 this.state.circleDefinition.push(new Point(x, y, settings));
 
                 if (this.state.circleDefinition.length === 2) {
-                    // Start point is the last point in the path
-                    // Circle def has [diameter_point, end_point] (Wait, original logic?)
-                    /* 
-                       Original Logic:
-                       circle_definition[0] = k (intermediate?)
-                       circle_definition[1] = b (diameter?)
-                       Wait, logic in handle_input:
-                       if length == 0 -> push first point
-                       else push to circle_def.
-                       if circle_def length == 2:
-                          params = find_circ()
-                          add_circle
-                          points.push(p)
-                          reset circle_def
-                    */
-
-                    // Refined logic to match user flow
-                    // User clicks result in:
-                    // 1. (Existing point A)
-                    // 2. Click 1 -> Intermediate K? 
-                    // 3. Click 2 -> Diameter B?
-
                     const params = find_circ(this.state.points, this.state.circleDefinition, settings);
                     this.state.trajectory.add_circle(
                         params.c, params.r, params.theta_0, params.theta_1,
@@ -156,7 +130,7 @@ export class CanvasHandler {
         ctx.clearRect(0, 0, width, height);
 
         // --- Workspace Limits ---
-        const radius = height / 2;
+        const radius = this.workspaceRadius || (height / 2);
 
         // 1. Draw valid workspace (Right Half - Cyan/Dark)
         ctx.beginPath();
@@ -175,9 +149,10 @@ export class CanvasHandler {
         ctx.strokeStyle = 'rgba(255, 68, 68, 0.5)';
         ctx.stroke();
 
-        // 3. Inner Limit (Singularity)
+        // 3. Inner Limit (Singularity) - 25% of workspace radius? Or just fixed physical size?
+        // Using same ratio as before but relative to workspace
         ctx.beginPath();
-        ctx.arc(origin.x, origin.y, height / 4, 0, 2 * Math.PI);
+        ctx.arc(origin.x, origin.y, radius * 0.5, 0, 2 * Math.PI);
         ctx.fillStyle = 'rgba(255, 68, 68, 0.05)';
         ctx.fill();
         ctx.strokeStyle = 'rgba(255, 68, 68, 0.2)';
@@ -238,16 +213,8 @@ export class CanvasHandler {
                 ctx.setLineDash([]);
             }
             else if (this.state.circleDefinition.length === 1) {
-                // Defining Arc End - PREVIEW ACTUAL ARC
-
-                // We need to simulate the circle definition to get arc parameters
-                // mocking the inputs for find_circ
+                // Defining Arc End
                 const mockCircleDef = [this.state.circleDefinition[0], m];
-                // Note: find_circ expects the circleDefinition to contain [diameter_point, end_point]
-                // Here 'm' lies on the diameter? No. 
-                // Wait, circle_definition[0] IS the diameter defining point.
-                // 'm' is the arc end point.
-
                 const params = find_circ(points, mockCircleDef, settings);
 
                 // Draw the dashed arc
@@ -264,12 +231,21 @@ export class CanvasHandler {
                 ctx.stroke();
                 ctx.setLineDash([]);
 
-                // Optional: Draw phantom full circle faintly
+                // Phantom full circle
                 ctx.beginPath();
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
                 ctx.lineWidth = 1;
                 ctx.arc(params.c.relX, params.c.relY, params.r, 0, 2 * Math.PI);
                 ctx.stroke();
+
+                // Radius Line Indicator (Center to Mouse)
+                ctx.beginPath();
+                ctx.moveTo(params.c.relX, params.c.relY);
+                ctx.lineTo(mouseX, mouseY);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.setLineDash([2, 2]);
+                ctx.stroke();
+                ctx.setLineDash([]);
             }
         }
     }
