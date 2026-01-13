@@ -16,7 +16,7 @@ The project has been refactored for better modularity and maintainability.
 
 ### Core Components
 - **`main.py`**: The entry point. Initializes the serial manager and launches the GUI.
-- **`config.py`**: Central configuration file for hardware settings, timing, and web server options.
+- **`config.py`**: Central configuration file for hardware settings, serial port (`SERIAL_PORT`), dimensions, and web server options.
 - **`state.py`**: Thread-safe global state management (`RobotState`) for sharing data between the GUI and serial threads.
 - **`gui_interface.py`**: Contains the logic exposed to the Javascript frontend (Eel callbacks) and trajectory validation.
 - **`serial_manager.py`**: Manages the background serial communication thread and protocol handling.
@@ -27,7 +27,9 @@ The project has been refactored for better modularity and maintainability.
     - `trajpy.py`: Trajectory generation algorithms, kinematics (inverse/direct), and path slicing.
     - `serial_com.py`: Low-level serial port wrapper.
     - `binary_protocol.py`: Implementation of the custom binary protocol.
-- **`layout/`**: Frontend resources (HTML, CSS, JavaScript).
+- **`layout/`**: Frontend resources.
+    - `css/`: Stylesheets (`style.css`, `variables.css`).
+    - `js/`: Modular JavaScript files (`main.js`, `canvas.js`, `api.js`, `state.js`, etc.).
 
 ### Legacy & Utils
 - **`data_manage.py`**: Utility script for processing raw log files (independent of main app).
@@ -53,12 +55,15 @@ The project has been refactored for better modularity and maintainability.
 
 ## Usage
 
-1.  **Run the application:**
+1.  **Configure the application:**
+    Open `config.py` and set the `SERIAL_PORT` variable to your device's path (e.g., `/dev/ttyUSB0` or `COM3`).
+
+2.  **Run the application:**
     ```bash
     python main.py
     ```
 
-2.  **Using the GUI:**
+3.  **Using the GUI:**
     -   The application window should open automatically.
     -   If a microcontroller is connected, the application will attempt to establish a serial connection.
     -   Use the interface to draw or define trajectories.
