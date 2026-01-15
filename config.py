@@ -11,7 +11,7 @@ SETTINGS = {
 }
 
 # Serial Configuration
-SERIAL_PORT = '/dev/tty.usbmodem2103' # Default, change this if needed
+SERIAL_PORT = None # Auto-detect
 
 # Robot Physical Dimensions
 SIZES = {

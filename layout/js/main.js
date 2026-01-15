@@ -27,6 +27,36 @@ const ui = {
     btnSend: document.getElementById('send-data-btn'),
     btnHoming: document.getElementById('homing-btn'),
     btnDemo: document.getElementById('repeatable-btn'),
+
+    // Text Tools
+    btnModeLinear: document.getElementById('mode-linear-btn'),
+    btnModeCurved: document.getElementById('mode-curved-btn'),
+    inputText: document.getElementById('text-input'),
+    inputFontSize: document.getElementById('font-size'),
+    controlsLinear: document.getElementById('linear-controls'),
+    controlsCurved: document.getElementById('curved-controls'),
+
+    // Linear Inputs
+    inputLinX: document.getElementById('lin-x'),
+    inputLinY: document.getElementById('lin-y'),
+    inputLinAngle: document.getElementById('lin-angle'),
+
+    // Workspace Config (Linear)
+    inputWsX: document.getElementById('ws-x'),
+    inputWsY: document.getElementById('ws-y'),
+    inputWsW: document.getElementById('ws-w'),
+    inputWsH: document.getElementById('ws-h'),
+
+    // Curved Inputs
+    inputCurvRadius: document.getElementById('curv-radius'),
+    inputCurvOffset: document.getElementById('curv-offset'),
+
+    inputCurvRadius: document.getElementById('curv-radius'),
+    inputCurvOffset: document.getElementById('curv-offset'),
+
+    warningMsg: document.getElementById('text-warning'),
+    btnGenerate: document.getElementById('generate-text-btn'),
+    btnClean: document.getElementById('clean-text-btn'),
 };
 
 // --- Event Listeners ---
@@ -68,6 +98,204 @@ ui.btnDemo.addEventListener('click', () => {
     // Implement demo/repeatable trajectory logic if needed
     // ...
     console.log("Demo trajectory requested");
+});
+
+// --- Text Tool Logic ---
+
+// Default State
+state.textMode = 'linear'; // 'linear' | 'curved'
+state.generatedTextPatches = [];
+
+function getTextOptions() {
+    return {
+        mode: state.textMode,
+        fontSize: parseFloat(ui.inputFontSize.value) || 0.05,
+        x: parseFloat(ui.inputLinX.value) || 0.2,
+        y: parseFloat(ui.inputLinY.value) || 0.0,
+        angle: parseFloat(ui.inputLinAngle.value) || 0,
+        radius: parseFloat(ui.inputCurvRadius.value) || 0.2,
+        offset: parseFloat(ui.inputCurvOffset.value) || 90
+    };
+}
+
+ui.btnModeLinear.addEventListener('click', () => setTextMode('linear'));
+ui.btnModeCurved.addEventListener('click', () => setTextMode('curved'));
+
+function setTextMode(mode) {
+    state.textMode = mode;
+
+    // Update Buttons
+    ui.btnModeLinear.classList.toggle('active', mode === 'linear');
+    ui.btnModeCurved.classList.toggle('active', mode === 'curved');
+
+    // Update Controls Visibility
+    if (mode === 'linear') {
+        ui.controlsLinear.classList.remove('hidden');
+        ui.controlsCurved.classList.add('hidden');
+    } else {
+        ui.controlsLinear.classList.add('hidden');
+        ui.controlsCurved.classList.remove('hidden');
+    }
+
+    // Trigger validation/redraw
+    validateText();
+}
+
+function updateWorkspaceState() {
+    // Parse inputs
+    const x = parseFloat(ui.inputWsX.value) || 0.15;
+    const y = parseFloat(ui.inputWsY.value) || -0.15;
+    const w = parseFloat(ui.inputWsW.value) || 0.20;
+    const h = parseFloat(ui.inputWsH.value) || 0.30;
+
+    // Update State
+    if (state.settings.linearWorkspace) {
+        state.settings.linearWorkspace.x = x;
+        state.settings.linearWorkspace.y = y;
+        state.settings.linearWorkspace.w = w;
+        state.settings.linearWorkspace.h = h;
+    }
+}
+
+// Ensure state is updated on any change
+[ui.inputWsX, ui.inputWsY, ui.inputWsW, ui.inputWsH].forEach(el => {
+    if (el) {
+        el.addEventListener('input', () => {
+            updateWorkspaceState();
+            // Also validate text since workspace changed
+            validateText();
+        });
+    }
+});
+
+// Initialize state from default inputs once
+updateWorkspaceState();
+
+// Real-time Text Visualization
+ui.inputText.addEventListener('input', () => {
+    if (ui.inputText.value.length > 0) {
+        ui.btnGenerate.click();
+    } else {
+        state.textPreview = [];
+        state.generatedTextPatches = [];
+        validateText();
+    }
+});
+
+ui.btnGenerate.addEventListener('click', async () => {
+    const text = ui.inputText.value;
+    if (!text) return;
+
+    const options = getTextOptions();
+    console.log("Generating with:", options);
+
+    const patches = await API.generateText(text, options);
+    state.generatedTextPatches = patches; // Store for valid sending?
+
+    // We want to visualize this.
+    // The patches are {type, points:[], data:{penup}}
+    // Let's treat them as a preview in canvas
+    // OR add them to state.points/trajectory?
+    // "Clicca Generate Text per visualizzare il percorso sulla canvas."
+    // So distinct from sending?
+    // "Clicca Send Trajectory per avviare il robot."
+
+    // We'll store them in appState.textPreview for Canvas to draw
+    state.textPreview = patches;
+
+});
+
+async function validateText() {
+    const text = ui.inputText.value;
+    if (!text) {
+        ui.warningMsg.classList.add('hidden');
+        return;
+    }
+
+    const options = getTextOptions();
+    const result = await API.validateText(text, options);
+
+    if (result.valid) {
+        ui.warningMsg.classList.add('hidden');
+    } else {
+        ui.warningMsg.classList.remove('hidden');
+        ui.warningMsg.textContent = "⚠ " + (result.message || "Text exceeds workspace!");
+    }
+}
+
+// Bind Validation to Inputs
+[ui.inputText, ui.inputFontSize, ui.inputLinX, ui.inputLinY, ui.inputLinAngle, ui.inputCurvRadius, ui.inputCurvOffset, ui.inputWsX, ui.inputWsY, ui.inputWsW, ui.inputWsH].forEach(el => {
+    if (el) el.addEventListener('input', validateText);
+});
+
+// Override Send Button to include Text if valid?
+// The user request says: "Clicca Generate Text per visualizzare... Clicca Send Trajectory per avviare".
+// "Send Trajectory" normally sends `state.trajectory`.
+// If we generated text, should we Convert text patches to `state.trajectory`?
+// Yes.
+// So when clicking Generate, we should probably update the main trajectory or a separate one?
+// If we update `state.trajectory`, it will show up as standard lines.
+// Let's overwrite `state.trajectory` when Generate is clicked.
+
+ui.btnGenerate.addEventListener('click', async () => {
+    const text = ui.inputText.value;
+    if (!text) return;
+
+    const options = getTextOptions();
+    console.log("Generating with:", options);
+
+    // Call API
+    const patches = await API.generateText(text, options);
+    console.log("Patches received:", patches);
+
+    // Update State for Preview
+    state.textPreview = patches;
+    state.generatedTextPatches = patches;
+
+    // IMPORTANT: To make it writeable, we must convert to state.trajectory
+    // BUT we should avoid overwriting if the user just wants to preview?
+    // User request: "Clicca Generate Text per visualizzare... Clicca Send Trajectory per avviare"
+    // So 'Generate' = Preview. 'Send' = Execute.
+    // However, Send Trajectory sends `state.trajectory.data`. 
+    // If we don't populate `state.trajectory`, 'Send' won't work for text.
+
+    // We will populate state.trajectory so 'Send' works.
+    state.points = [];
+    state.trajectory.reset();
+    state.trajectory.data = [];
+
+    patches.forEach(patch => {
+        if (patch.type === 'line') {
+            const p0 = { actX: patch.points[0][0], actY: patch.points[0][1] };
+            const p1 = { actX: patch.points[1][0], actY: patch.points[1][1] };
+
+            state.trajectory.data.push({
+                type: 'line',
+                data: [p0, p1, patch.data.penup]
+            });
+        }
+    });
+
+    state.sentPoints = []; // Clear old ghosts
+
+    // Force Canvas Redraw? Animate loop handles it.
+    // Logging to verify
+    console.log("Trajectory populated with patches:", state.trajectory.data.length);
+    validateText();
+});
+
+ui.btnClean.addEventListener('click', () => {
+    // Clear Input
+    ui.inputText.value = "";
+
+    // Clear State
+    state.textPreview = [];
+    state.generatedTextPatches = [];
+    state.points = [];
+    state.trajectory.reset();
+
+    ui.warningMsg.classList.add('hidden');
+    console.log("Workspace Cleared");
 });
 
 // --- Helper Functions ---

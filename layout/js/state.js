@@ -14,7 +14,15 @@ class StateManager {
             'l1': 0.170,
             'l2': 0.158,
             's_step': 1 / 50,
-            'framerate': 60
+            'framerate': 60,
+
+            // Workspace Config
+            'linearWorkspace': {
+                'x': 0.15,
+                'y': -0.15,
+                'w': 0.20,
+                'h': 0.30
+            }
         };
 
         this.points = [];

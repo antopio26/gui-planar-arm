@@ -34,6 +34,9 @@ body {
     border-right: 1px solid var(--bg-tertiary);
     z-index: 10;
     box-shadow: var(--shadow-md);
+    overflow-y: auto;
+    /* Allow scrolling if content is too tall */
+    max-height: 100vh;
 }
 
 .brand {
@@ -165,4 +168,64 @@ canvas {
 .notification.show {
     transform: translateY(0);
     opacity: 1;
+}
+
+/* Input Styles */
+.input-full {
+    width: 100%;
+    padding: var(--spacing-sm);
+    border: 1px solid var(--bg-tertiary);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-radius: var(--border-radius-sm);
+    margin-bottom: var(--spacing-sm);
+}
+
+.input-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-xs);
+    font-size: 0.9rem;
+}
+
+.input-row input {
+    width: 60px;
+    padding: 2px 5px;
+    background: var(--bg-primary);
+    border: 1px solid var(--bg-tertiary);
+    color: var(--text-primary);
+    border-radius: var(--border-radius-sm);
+    text-align: right;
+}
+
+/* Toggle Buttons */
+.toggle-row {
+    display: flex;
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+}
+
+.btn.sm {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    flex: 1;
+}
+
+/* Utilities */
+.hidden {
+    display: none !important;
+}
+
+/* Warnings */
+.warning-msg {
+    color: var(--danger-color);
+    font-size: 0.8rem;
+    font-weight: bold;
+    margin-bottom: var(--spacing-sm);
+    padding: var(--spacing-xs);
+    border: 1px solid var(--danger-color);
+    border-radius: var(--border-radius-sm);
+    background: rgba(255, 68, 68, 0.1);
+    text-align: center;
 }

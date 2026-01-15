@@ -9,7 +9,10 @@ from state import state
 from serial_manager import serial_manager
 from lib import serial_com as scm
 from lib import binary_protocol as bp
+from lib import char_gen
+from lib import transform
 import plotting
+import math
 
 def read_position_cartesian() -> list[float]:
     q_actual = state.last_known_q[:]
@@ -170,3 +173,142 @@ def py_serial_startup():
     print(f"Calling scm.ser_init({SERIAL_PORT})...")
     SETTINGS['ser_started'] = scm.ser_init(SERIAL_PORT)
     print(f"Serial Started? {SETTINGS['ser_started']}")
+
+
+def _apply_linear_transform(patches, x_offset, y_offset, angle_deg):
+    angle_rad = math.radians(angle_deg)
+    cos_a = math.cos(angle_rad)
+    sin_a = math.sin(angle_rad)
+    
+    transformed = []
+    for patch in patches:
+        new_points = []
+        for p in patch['points']:
+            # Rotation
+            x_rot = p[0] * cos_a - p[1] * sin_a
+            y_rot = p[0] * sin_a + p[1] * cos_a
+            # Translation
+            new_points.append([x_rot + x_offset, y_rot + y_offset])
+            
+        transformed.append({
+            'type': patch['type'],
+            'points': new_points,
+            'data': patch['data']
+        })
+    return transformed
+
+def _apply_curved_transform(patches, radius, offset_angle):
+    # Convert patches to the format expected by transform.py (if needed)
+    # OR better: just implement the loop here using transform.apply_curved_transform logic
+    # But since we wrote apply_curved_transform to take a list of dicts {x,y,z}, 
+    # we can adapt.
+    
+    transformed = []
+    
+    for patch in patches:
+        # Create a temporary trajectory list for this patch's points
+        temp_traj = []
+        for p in patch['points']:
+            temp_traj.append({'x': p[0], 'y': p[1], 'z': 0}) # Z doesn't matter much here
+            
+        # Transform
+        # Note: char_gen outputs X as horizontal, Y as vertical.
+        # transform.apply_curved_transform maps X to Angle, Y to Radius.
+        # We need to ensure scale is correct. 
+        # But stick with unit units?
+        
+        # Call the library function
+        res = transform.apply_curved_transform(temp_traj, radius, start_angle_deg=offset_angle)
+        
+        new_points = [[pt['x'], pt['y']] for pt in res]
+        
+        transformed.append({
+            'type': patch['type'],
+            'points': new_points,
+            'data': patch['data']
+        })
+        
+    return transformed
+
+@eel.expose
+def py_generate_text(text, options):
+    print(f"Generating Text: '{text}' with options: {options}")
+    try:
+        if not text: return []
+        
+        mode = options.get('mode', 'linear')
+        font_size = float(options.get('fontSize', 0.05))
+        
+        
+        # 1. Generate Base Text (Linear, at origin)
+        # We pass start_pos=(0,0) and handle placement via transform
+        patches = char_gen.text_to_traj(text, (0,0), font_size, char_spacing=font_size*0.2)
+        
+        # 2. Apply Transform
+        final_patches = []
+        
+        if mode == 'linear':
+            x = float(options.get('x', 0.2))
+            y = float(options.get('y', 0.0))
+            angle = float(options.get('angle', 0.0))
+            final_patches = _apply_linear_transform(patches, x, y, angle)
+            
+        elif mode == 'curved':
+            radius = float(options.get('radius', 0.2))
+            offset = float(options.get('offset', 90))
+            final_patches = _apply_curved_transform(patches, radius, offset)
+            
+        else:
+            final_patches = patches
+
+        return final_patches
+        
+    except Exception as e:
+        print(f"Error generating text: {e}")
+        traceback.print_exc()
+        return []
+
+@eel.expose
+def py_validate_text(text, options):
+    # Generate the trajectory first
+    patches = py_generate_text(text, options)
+    
+    if not patches:
+        return {'valid': True, 'message': 'Empty'}
+
+    valid = True
+    msg = "OK"
+    
+    # Check every point against IK or Workspace limits
+    # We can use tpy.ik to check if a solution exists
+    for patch in patches:
+        for p in patch['points']:
+            try:
+                # Check if point is reachable
+                # tpy.ik returns numpy array of q1, q2
+                # If it raises error or returns NaNs (depends on implementation), it's invalid.
+                # Looking at tpy.ik (dk is imported), let's assume it might throw or we check bounds.
+                # Actually commonly verification is checking if point is within reach.
+                # R_min < dist < R_max
+                
+                x, y = p
+                dist = (x**2 + y**2)**0.5
+                
+                # Check simple radius bounds
+                l1 = SIZES['l1']
+                l2 = SIZES['l2']
+                max_reach = l1 + l2
+                min_reach = abs(l1 - l2)
+                
+                if dist > max_reach * 0.99 or dist < min_reach * 1.01:
+                    valid = False
+                    msg = "Point out of reach"
+                    break
+                    
+            except Exception as e:
+                valid = False
+                msg = f"IK Error: {e}"
+                break
+        if not valid: break
+        
+    return {'valid': valid, 'message': msg}

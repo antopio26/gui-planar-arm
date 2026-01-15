@@ -50,6 +50,67 @@
             </div>
 
             <div class="control-group">
+                <div class="group-title">Text Tools</div>
+
+                <div class="toggle-row">
+                    <button id="mode-linear-btn" class="btn active sm">Linear</button>
+                    <button id="mode-curved-btn" class="btn sm">Curved</button>
+                </div>
+
+                <input type="text" id="text-input" placeholder="Enter text..." class="input-full">
+
+                <div class="input-row">
+                    <label>Size:</label>
+                    <input type="number" id="font-size" value="0.05" step="0.005" class="input-sm">
+                </div>
+
+                <!-- Linear Controls -->
+                <div id="linear-controls">
+                    <div class="input-row">
+                        <label>X:</label> <input type="number" id="lin-x" value="0.20" step="0.01">
+                    </div>
+                    <div class="input-row">
+                        <label>Y:</label> <input type="number" id="lin-y" value="0.00" step="0.01">
+                    </div>
+                    <div class="input-row">
+                        <label>Angle:</label> <input type="number" id="lin-angle" value="0" step="5">
+                    </div>
+
+                    <div style="margin-top: 10px; font-size: 0.8em; color: gray;">Workspace Config</div>
+                    <div class="input-row">
+                        <label>Sheet X:</label><input type="number" id="ws-x" value="0.15" step="0.01">
+                    </div>
+                    <div class="input-row">
+                        <label>Sheet Y:</label><input type="number" id="ws-y" value="-0.15" step="0.01">
+                    </div>
+                    <div class="input-row">
+                        <label>Width:</label><input type="number" id="ws-w" value="0.20" step="0.01">
+                    </div>
+                    <div class="input-row">
+                        <label>Height:</label><input type="number" id="ws-h" value="0.30" step="0.01">
+                    </div>
+                </div>
+
+                <!-- Curved Controls -->
+                <div id="curved-controls" class="hidden">
+                    <div class="input-row">
+                        <label>Radius:</label> <input type="number" id="curv-radius" value="0.25" step="0.01">
+                    </div>
+                    <div class="input-row">
+                        <label>Offset:</label> <input type="number" id="curv-offset" value="90" step="5">
+                    </div>
+                </div>
+
+                <div id="text-warning" class="warning-msg hidden">⚠ Text exceeds workspace!</div>
+
+                <div class="toggle-row">
+                    <button id="generate-text-btn" class="btn primary sm">Generate Text</button>
+                    <button id="clean-text-btn" class="btn sm">Clean Text</button>
+                </div>
+                <div style="height: 10px;"></div>
+            </div>
+
+            <div class="control-group">
                 <div class="group-title">Commands</div>
                 <button id="send-data-btn" class="btn primary">Send Trajectory</button>
                 <button id="homing-btn" class="btn">Homing</button>
