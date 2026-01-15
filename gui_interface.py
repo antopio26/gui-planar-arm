@@ -124,6 +124,7 @@ def py_get_data():
         
         validate_trajectory(q, dq, ddq)
         
+        print(f"DEBUG PENUPS: {set(penups)}")
         serial_manager.send_data('trj', q=q, dq=dq, ddq=ddq)
         
         if len(q0s) > 0:
