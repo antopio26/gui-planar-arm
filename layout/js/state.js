@@ -18,10 +18,10 @@ class StateManager {
 
             // Workspace Config
             'linearWorkspace': {
-                'x': 0.15,
-                'y': -0.15,
-                'w': 0.20,
-                'h': 0.30
+                'x': 0.01,
+                'y': -0.18,
+                'w': 0.27,
+                'h': 0.36
             }
         };
 

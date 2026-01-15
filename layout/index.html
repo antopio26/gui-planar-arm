@@ -57,7 +57,7 @@
                     <button id="mode-curved-btn" class="btn sm">Curved</button>
                 </div>
 
-                <input type="text" id="text-input" placeholder="Enter text..." class="input-full">
+                <textarea id="text-input" placeholder="Enter text..." class="input-full" rows="1"></textarea>
 
                 <div class="input-row">
                     <label>Size:</label>
@@ -67,27 +67,26 @@
                 <!-- Linear Controls -->
                 <div id="linear-controls">
                     <div class="input-row">
-                        <label>X:</label> <input type="number" id="lin-x" value="0.20" step="0.01">
+                        <label>Position X:</label> <input type="number" id="lin-x" value="0.22" step="0.01">
                     </div>
                     <div class="input-row">
-                        <label>Y:</label> <input type="number" id="lin-y" value="0.00" step="0.01">
+                        <label>Position Y:</label> <input type="number" id="lin-y" value="0.17" step="0.01">
                     </div>
                     <div class="input-row">
-                        <label>Angle:</label> <input type="number" id="lin-angle" value="0" step="5">
+                        <label>Angle:</label> <input type="number" id="lin-angle" value="-90" step="5">
                     </div>
 
-                    <div style="margin-top: 10px; font-size: 0.8em; color: gray;">Workspace Config</div>
                     <div class="input-row">
-                        <label>Sheet X:</label><input type="number" id="ws-x" value="0.15" step="0.01">
+                        <label>Sheet X:</label><input type="number" id="ws-x" value="0.01" step="0.01">
                     </div>
                     <div class="input-row">
-                        <label>Sheet Y:</label><input type="number" id="ws-y" value="-0.15" step="0.01">
+                        <label>Sheet Y:</label><input type="number" id="ws-y" value="-0.18" step="0.01">
                     </div>
                     <div class="input-row">
-                        <label>Width:</label><input type="number" id="ws-w" value="0.20" step="0.01">
+                        <label>Width:</label><input type="number" id="ws-w" value="0.27" step="0.01">
                     </div>
                     <div class="input-row">
-                        <label>Height:</label><input type="number" id="ws-h" value="0.30" step="0.01">
+                        <label>Height:</label><input type="number" id="ws-h" value="0.36" step="0.01">
                     </div>
                 </div>
 
@@ -105,6 +104,7 @@
 
                 <div class="toggle-row">
                     <button id="generate-text-btn" class="btn primary sm">Generate Text</button>
+                    <button id="newline-btn" class="btn sm">New Line ↵</button>
                     <button id="clean-text-btn" class="btn sm">Clean Text</button>
                 </div>
                 <div style="height: 10px;"></div>

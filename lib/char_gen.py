@@ -63,6 +63,15 @@ def text_to_traj(text: str, start_pos: tuple, font_size: float, char_spacing: fl
     cursor_x, cursor_y = start_pos
     
     for char in text:
+        if char == '\n':
+            cursor_x = start_pos[0]
+            cursor_y -= font_size * 1.5 # Line spacing
+            continue
+
+        if char == ' ':
+            cursor_x += (font_size * 0.8) + char_spacing
+            continue
+
         strokes = get_char_strokes(char)
         
         # Adjust for character width + spacing

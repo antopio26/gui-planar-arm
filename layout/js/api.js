@@ -26,6 +26,16 @@ export const API = {
         await window.eel.py_get_data()();
     },
 
+    async generateText(text, options) {
+        if (!window.eel) return [];
+        return await window.eel.py_generate_text(text, options)();
+    },
+
+    async validateText(text, options) {
+        if (!window.eel) return { valid: false, message: "API Error" };
+        return await window.eel.py_validate_text(text, options)();
+    },
+
     // Setup callbacks that Python calls
     initCallbacks(callbacks) {
         if (!window.eel) {

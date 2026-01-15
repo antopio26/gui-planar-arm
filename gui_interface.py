@@ -248,7 +248,7 @@ def py_generate_text(text, options):
         final_patches = []
         
         if mode == 'linear':
-            x = float(options.get('x', 0.2))
+            x = float(options.get('x', 0.05))
             y = float(options.get('y', 0.0))
             angle = float(options.get('angle', 0.0))
             final_patches = _apply_linear_transform(patches, x, y, angle)

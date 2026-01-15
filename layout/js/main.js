@@ -56,6 +56,7 @@ const ui = {
 
     warningMsg: document.getElementById('text-warning'),
     btnGenerate: document.getElementById('generate-text-btn'),
+    btnNewline: document.getElementById('newline-btn'),
     btnClean: document.getElementById('clean-text-btn'),
 };
 
@@ -110,7 +111,7 @@ function getTextOptions() {
     return {
         mode: state.textMode,
         fontSize: parseFloat(ui.inputFontSize.value) || 0.05,
-        x: parseFloat(ui.inputLinX.value) || 0.2,
+        x: parseFloat(ui.inputLinX.value) || 0.05,
         y: parseFloat(ui.inputLinY.value) || 0.0,
         angle: parseFloat(ui.inputLinAngle.value) || 0,
         radius: parseFloat(ui.inputCurvRadius.value) || 0.2,
@@ -143,10 +144,10 @@ function setTextMode(mode) {
 
 function updateWorkspaceState() {
     // Parse inputs
-    const x = parseFloat(ui.inputWsX.value) || 0.15;
-    const y = parseFloat(ui.inputWsY.value) || -0.15;
-    const w = parseFloat(ui.inputWsW.value) || 0.20;
-    const h = parseFloat(ui.inputWsH.value) || 0.30;
+    const x = parseFloat(ui.inputWsX.value) || 0.01;
+    const y = parseFloat(ui.inputWsY.value) || -0.18;
+    const w = parseFloat(ui.inputWsW.value) || 0.27;
+    const h = parseFloat(ui.inputWsH.value) || 0.36;
 
     // Update State
     if (state.settings.linearWorkspace) {
@@ -234,54 +235,84 @@ async function validateText() {
 // If we generated text, should we Convert text patches to `state.trajectory`?
 // Yes.
 // So when clicking Generate, we should probably update the main trajectory or a separate one?
-// If we update `state.trajectory`, it will show up as standard lines.
-// Let's overwrite `state.trajectory` when Generate is clicked.
+// --- Real-time Text Logic ---
 
-ui.btnGenerate.addEventListener('click', async () => {
+let debounceTimer = null;
+
+async function generatePreview() {
     const text = ui.inputText.value;
-    if (!text) return;
+    if (!text) {
+        state.textPreview = [];
+        state.generatedTextPatches = [];
+        validateText(); // Will hide warning
+        return;
+    }
 
     const options = getTextOptions();
-    console.log("Generating with:", options);
+    console.log("Generating Preview for:", text); // Debug
 
-    // Call API
-    const patches = await API.generateText(text, options);
-    console.log("Patches received:", patches);
+    try {
+        const patches = await API.generateText(text, options);
+        console.log("Patches:", patches ? patches.length : 0);
 
-    // Update State for Preview
-    state.textPreview = patches;
-    state.generatedTextPatches = patches;
+        state.textPreview = patches || [];
+        state.generatedTextPatches = patches || [];
 
-    // IMPORTANT: To make it writeable, we must convert to state.trajectory
-    // BUT we should avoid overwriting if the user just wants to preview?
-    // User request: "Clicca Generate Text per visualizzare... Clicca Send Trajectory per avviare"
-    // So 'Generate' = Preview. 'Send' = Execute.
-    // However, Send Trajectory sends `state.trajectory.data`. 
-    // If we don't populate `state.trajectory`, 'Send' won't work for text.
+        // Sync Internal Trajectory for Sending
+        state.points = [];
+        state.trajectory.reset();
+        state.trajectory.data = [];
 
-    // We will populate state.trajectory so 'Send' works.
-    state.points = [];
-    state.trajectory.reset();
-    state.trajectory.data = [];
-
-    patches.forEach(patch => {
-        if (patch.type === 'line') {
-            const p0 = { actX: patch.points[0][0], actY: patch.points[0][1] };
-            const p1 = { actX: patch.points[1][0], actY: patch.points[1][1] };
-
-            state.trajectory.data.push({
-                type: 'line',
-                data: [p0, p1, patch.data.penup]
+        if (state.textPreview.length > 0) {
+            state.textPreview.forEach(patch => {
+                if (patch.type === 'line') {
+                    const p0 = { actX: patch.points[0][0], actY: patch.points[0][1] };
+                    const p1 = { actX: patch.points[1][0], actY: patch.points[1][1] };
+                    state.trajectory.data.push({
+                        type: 'line',
+                        data: [p0, p1, patch.data.penup]
+                    });
+                }
             });
         }
-    });
 
-    state.sentPoints = []; // Clear old ghosts
+        validateText(); // Validate the result
 
-    // Force Canvas Redraw? Animate loop handles it.
-    // Logging to verify
-    console.log("Trajectory populated with patches:", state.trajectory.data.length);
-    validateText();
+    } catch (e) {
+        console.error("Preview Generation Error:", e);
+    }
+}
+
+// Input Listener (Debounced)
+ui.inputText.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+        generatePreview();
+    }, 100); // 100ms delay
+});
+
+// Update on other parameter changes too
+[ui.inputFontSize, ui.inputLinX, ui.inputLinY, ui.inputLinAngle, ui.inputCurvRadius, ui.inputCurvOffset].forEach(el => {
+    if (el) {
+        el.addEventListener('input', () => {
+            // Debounce less critical here? Or same.
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(generatePreview, 100);
+        });
+    }
+});
+
+// Generate Button (Immediate)
+ui.btnGenerate.addEventListener('click', () => {
+    clearTimeout(debounceTimer);
+    generatePreview();
+});
+
+// New Line Button
+ui.btnNewline.addEventListener('click', () => {
+    ui.inputText.value += "\n";
+    ui.inputText.focus(); // Keep focus
+    generatePreview();
 });
 
 ui.btnClean.addEventListener('click', () => {
