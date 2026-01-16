@@ -163,3 +163,38 @@ La funzione `py_clear_state` (pulsante "Clean") esegue un reset profondo:
 *   Interrompe i flag di registrazione attiva.
 Questo previene il tipico problema di "stato sporco" dove il robot crede di essere in una posizione diversa da quella reale dopo un errore.
 *   **Console Log**: Messaggi di errore o conferma appaiono nella console del browser e del terminale.
+
+### M. ULTIMI PROGRESSI (Visualizzazione e Simulazione Avanzata)
+Durante l'ultima sessione (16 Gennaio 2026, Sera), abbiamo introdotto funzionalità critiche per l'usabilità e la diagnosi in tempo reale:
+
+#### 1. Visualizzazione Real-Time della Traiettoria
+- **Sync Comandi-Video**: Il braccio visualizzato nella GUI ora si muove in tempo reale in sincronia con i comandi inviati al robot (`sent_trajectory`).
+- **Indipendenza dal Feedback**: Anche se il feedback seriale dal robot reale è in ritardo o assente, l'utente vede cosa il sistema *sta cercando di fare*. Questo migliora drasticamente la percezione di responsività.
+
+#### 2. Visualizzazione Pen State (Stato Penna)
+- **Indicatore Visivo**: L'estremità del braccio (End Effector) cambia colore dinamicamente per indicare se il robot sta scrivendo o si sta spostando.
+    - **BLU**: Penna ALZATA (Movimento di riposizionamento, non scrive).
+    - **ROSSO**: Penna ABBASSATA (Scrittura attiva).
+- **Integrazione Totale**: Questo stato è tracciato dal backend (`FirmwareState`), inviato via seriale simulata e renderizzato dal frontend (`Manipulator.draw_pose`).
+
+#### 3. Refinement Font Geometrico
+- **Direzionalità Ottimizzata**: Modificate lettere specifiche (es. 'O', 'C') per essere disegnate in **senso orario** o partendo da punti specifici (es. dal basso), migliorando la fluidità meccanica e l'estetica del tratto.
+- **Tolleranza Accelerazione**: Ricalibrati i parametri di sicurezza (`MAX_ACC_TOLERANCE_FACTOR` aumentato a 15.0) per permettere l'esecuzione di font vettoriali complessi che, essendo costituiti da molti piccoli segmenti, generavano falsi positivi nei check di accelerazione.
+
+### N. SISTEMA DI SALVATAGGIO "STAMPI" (TEMPLATES)
+È stata introdotta una funzionalità per salvare e riutilizzare traiettorie complesse (testi o disegni), permettendo di creare una libreria di "stampi" pronti all'uso.
+
+#### 1. Architettura Save/Load
+- **Directory**: I file sono salvati in formato `.json` nella cartella `saved_trajectories/` locale.
+- **Interfaccia**: Nuova sezione "Saved Templates" nella sidebar con:
+    - Input per nome file.
+    - Pulsanti **Save** e **Load**.
+    - Menu a tendina dinamico che elenca i file disponibili.
+
+#### 2. Gestione Primitive Geometriche (Fix Cerchi)
+- **Problema**: Il sistema di anteprima e esecuzione del robot lavora nativamente con liste di segmenti (punti), mentre i cerchi erano memorizzati come oggetti matematici puri (Centro, Raggio), causando la perdita del dato durante il ricaricamento.
+- **Soluzione Implementata**: Quando si salva un Template, il sistema intercetta le primitive di tipo `circle` e le **campiona automaticamente** in una serie di piccoli segmenti lineari (risoluzione ~5°).
+- **Risultato**: 
+    - Il file salvato contiene una rappresentazione vettoriale fedele ad alta densità.
+    - Il caricamento è compatibile al 100% con il motore di movimento del robot.
+    - L'anteprima visualizzata dopo il caricamento è identica all'originale.

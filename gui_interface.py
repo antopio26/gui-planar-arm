@@ -405,3 +405,85 @@ def py_validate_text(text, options):
         if not valid: break
         
     return {'valid': valid, 'message': msg}
+
+import os
+import json
+
+TEMPLATE_DIR = "saved_trajectories"
+
+@eel.expose
+def py_save_template(filename, data):
+    print(f"Saving Template: {filename}")
+    try:
+        if not filename:
+            raise ValueError("Filename cannot be empty")
+        
+        # Add .json extension if missing
+        if not filename.endswith('.json'):
+            filename += ".json"
+            
+        # Ensure dir exists (redundant check)
+        if not os.path.exists(TEMPLATE_DIR):
+            os.makedirs(TEMPLATE_DIR)
+            
+        filepath = os.path.join(TEMPLATE_DIR, filename)
+        
+        with open(filepath, 'w') as f:
+            json.dump(data, f, indent=4)
+            
+        print(f"Saved to {filepath}")
+        return {'success': True, 'message': f"Saved {filename}"}
+        
+    except Exception as e:
+        print(f"Save Error: {e}")
+        return {'success': False, 'message': str(e)}
+
+@eel.expose
+def py_load_template(filename):
+    print(f"Loading Template: {filename}")
+    try:
+        filepath = os.path.join(TEMPLATE_DIR, filename)
+        if not os.path.exists(filepath):
+             raise FileNotFoundError(f"File {filename} not found")
+             
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+            
+        return {'success': True, 'data': data}
+        
+    except Exception as e:
+        print(f"Load Error: {e}")
+        return {'success': False, 'message': str(e)}
+
+@eel.expose
+def py_list_templates():
+    try:
+        if not os.path.exists(TEMPLATE_DIR):
+            return []
+            
+        files = [f for f in os.listdir(TEMPLATE_DIR) if f.endswith('.json')]
+        return files
+        
+    except Exception as e:
+        print(f"List Error: {e}")
+        return []
+
+@eel.expose
+def py_delete_template(filename):
+    print(f"Deleting Template: {filename}")
+    try:
+        if not filename:
+            raise ValueError("Filename cannot be empty")
+            
+        filepath = os.path.join(TEMPLATE_DIR, filename)
+        
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"File {filename} not found")
+            
+        os.remove(filepath)
+        print(f"Deleted {filepath}")
+        return {'success': True, 'message': f"Deleted {filename}"}
+        
+    except Exception as e:
+        print(f"Delete Error: {e}")
+        return {'success': False, 'message': str(e)}

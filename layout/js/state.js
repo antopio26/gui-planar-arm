@@ -3,7 +3,14 @@ import { Trajectory } from './trajectory.js';
 
 export const TOOLS = {
     LINE: 'line',
-    CIRCLE: 'circle'
+    CIRCLE: 'circle',
+    RECTANGLE: 'rectangle',
+    POLYGON: 'polygon',
+    ELLIPSE: 'ellipse',
+    ARC: 'arc',
+    FREEHAND: 'freehand',
+    SEMICIRCLE: 'semicircle',
+    FULLCIRCLE: 'fullcircle'
 };
 
 class StateManager {
@@ -37,6 +44,24 @@ class StateManager {
         this.manipulator = null;
         this.trajectory = null;
         this.sentTrajectory = null;
+
+        // History for Undo/Redo
+        this.history = [];
+        this.historyIndex = -1;
+        this.maxHistorySize = 50;
+
+        // Grid settings
+        this.snapToGrid = false;
+        this.gridSize = 20; // pixels
+        this.showGrid = false;
+
+        // Tool-specific options
+        this.polygonSides = 6;
+        this.arcSegments = 20;
+        this.freehandPoints = [];
+        this.rectangleStart = null;
+        this.semicircleStart = null;
+        this.fullcircleStart = null;
     }
 
     init(canvasWidth, canvasHeight) {
@@ -61,6 +86,61 @@ class StateManager {
         this.sentPoints = [...this.points];
         this.sentTrajectory.data = [...this.trajectory.data];
         this.resetDrawing();
+    }
+
+    saveState() {
+        // Remove any states after current index (when undoing then making new action)
+        this.history = this.history.slice(0, this.historyIndex + 1);
+
+        // Create deep copy of current state
+        const state = {
+            points: this.points.map(p => ({ ...p })),
+            trajectoryData: this.trajectory.data.map(t => ({ ...t })),
+            circleDefinition: this.circleDefinition.map(p => ({ ...p })),
+            penUp: this.penUp,
+            tool: this.tool
+        };
+
+        this.history.push(state);
+        this.historyIndex++;
+
+        // Limit history size
+        if (this.history.length > this.maxHistorySize) {
+            this.history.shift();
+            this.historyIndex--;
+        }
+    }
+
+    restoreState(state) {
+        if (!state) return;
+
+        this.points = state.points.map(p => ({ ...p }));
+        this.trajectory.data = state.trajectoryData.map(t => ({ ...t }));
+        this.circleDefinition = state.circleDefinition.map(p => ({ ...p }));
+        this.penUp = state.penUp;
+        this.tool = state.tool;
+    }
+
+    canUndo() {
+        return this.historyIndex > 0;
+    }
+
+    canRedo() {
+        return this.historyIndex < this.history.length - 1;
+    }
+
+    undo() {
+        if (this.canUndo()) {
+            this.historyIndex--;
+            this.restoreState(this.history[this.historyIndex]);
+        }
+    }
+
+    redo() {
+        if (this.canRedo()) {
+            this.historyIndex++;
+            this.restoreState(this.history[this.historyIndex]);
+        }
     }
 }
 

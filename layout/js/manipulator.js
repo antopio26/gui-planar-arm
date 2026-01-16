@@ -5,6 +5,7 @@ export class Manipulator {
         this.q_coords = q;
         this.settings = settings;
         this.traces = { 'x1': [], 'x2': [] };
+        this.penUp = true; // Default to Up
 
         // Calculate initial position
         const [p1, p2] = this.dk(q);
@@ -15,7 +16,15 @@ export class Manipulator {
     // --- Getters & Setters ---
 
     set q(q) {
-        this.q_coords = q;
+        // If q is array [q0, q1], use it.
+        // But if we want to pass penUp, we might need a dedicated method or pass [q0, q1, penUp]
+        if (q.length === 3) {
+            this.penUp = Boolean(q[2]);
+            this.q_coords = [q[0], q[1]];
+        } else {
+            this.q_coords = q;
+        }
+
         const [p1, p2] = this.dk(this.q_coords);
         this.p = p1;
         this.end_eff = p2;
@@ -96,7 +105,11 @@ export class Manipulator {
         // Draw Joints
         this.drawJoint(ctx, origin.x, origin.y);
         this.drawJoint(ctx, this.p[0], this.p[1]);
-        this.drawJoint(ctx, this.end_eff[0], this.end_eff[1], '#00e5ff'); // Distinguish end effector
+
+        // End Effector Color based on Pen State
+        // Blue if Pen Up, Red if Pen Down
+        const effColor = this.penUp ? '#00e5ff' : '#ff4444'; // Cyan vs Red
+        this.drawJoint(ctx, this.end_eff[0], this.end_eff[1], effColor);
     }
 
     drawJoint(ctx, x, y, color = '#ffffff') {

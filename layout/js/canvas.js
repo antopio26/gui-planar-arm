@@ -1,5 +1,6 @@
 import { Point, find_circ } from './utils.js';
 import { appState, TOOLS } from './state.js';
+import { calculateRectangle, snapPointToGrid } from './utils_drawing.js';
 
 export class CanvasHandler {
     constructor(canvas, state) {
@@ -67,9 +68,16 @@ export class CanvasHandler {
     }
 
     handleClick(e) {
-        const x = this.mouseX;
-        const y = this.mouseY;
+        let x = this.mouseX;
+        let y = this.mouseY;
         const settings = this.state.settings;
+
+        // Apply grid snapping if enabled
+        if (this.state.snapToGrid) {
+            const snappedPoint = snapPointToGrid(new Point(x, y, settings), this.state.gridSize, settings);
+            x = snappedPoint.relX;
+            y = snappedPoint.relY;
+        }
 
         // Radius check (workspace limit)
         const distSq = Math.pow(x - settings.origin.x, 2) + Math.pow(y - settings.origin.y, 2);
@@ -95,6 +103,7 @@ export class CanvasHandler {
                 const p0 = this.state.points[this.state.points.length - 2];
                 const p1 = this.state.points[this.state.points.length - 1];
                 this.state.trajectory.add_line(p0, p1, this.state.penUp);
+                this.state.saveState(); // Save to history
             }
 
         } else if (currentTool === TOOLS.CIRCLE) {
@@ -112,7 +121,128 @@ export class CanvasHandler {
 
                     this.state.points.push(params.p);
                     this.state.circleDefinition = [];
+                    this.state.saveState(); // Save to history
                 }
+            }
+        } else if (currentTool === TOOLS.RECTANGLE) {
+            if (!this.state.rectangleStart) {
+                // First click - set start corner
+                // If we have previous points, use the last one as start
+                if (this.state.points.length > 0) {
+                    this.state.rectangleStart = this.state.points[this.state.points.length - 1];
+                } else {
+                    this.state.rectangleStart = new Point(x, y, settings);
+                    this.state.points.push(this.state.rectangleStart);
+                }
+            } else {
+                // Second click - complete rectangle
+                const p1 = this.state.rectangleStart;
+                const p2 = new Point(x, y, settings);
+
+                // Calculate all 4 corners
+                const corners = calculateRectangle(p1, p2, settings);
+
+                // Add 4 lines to form rectangle
+                for (let i = 0; i < 4; i++) {
+                    const start = corners[i];
+                    const end = corners[(i + 1) % 4];
+                    this.state.trajectory.add_line(start, end, this.state.penUp);
+                }
+
+                // Add final corner to points
+                this.state.points.push(p2);
+
+                // Reset for next rectangle
+                this.state.rectangleStart = null;
+                this.state.saveState(); // Save to history
+            }
+        } else if (currentTool === TOOLS.SEMICIRCLE) {
+            if (!this.state.semicircleStart) {
+                // First click - set center
+                // If we have previous points, use the last one as center
+                if (this.state.points.length > 0) {
+                    this.state.semicircleStart = this.state.points[this.state.points.length - 1];
+                } else {
+                    this.state.semicircleStart = new Point(x, y, settings);
+                    this.state.points.push(this.state.semicircleStart);
+                }
+            } else {
+                // Second click - define radius and create semicircle
+                const center = this.state.semicircleStart;
+                const radiusPoint = new Point(x, y, settings);
+
+                // Calculate radius in PIXEL coordinates
+                const dx = radiusPoint.relX - center.relX;
+                const dy = radiusPoint.relY - center.relY;
+                const radius = Math.sqrt(dx * dx + dy * dy);
+
+                // Calculate start angle (from center to radius point)
+                const startAngle = Math.atan2(dy, dx);
+                const endAngle = startAngle + Math.PI; // 180 degrees = semicircle
+
+                // Create start and end points for the arc
+                const startPoint = new Point(
+                    center.relX + radius * Math.cos(startAngle),
+                    center.relY + radius * Math.sin(startAngle),
+                    settings
+                );
+
+                const endPoint = new Point(
+                    center.relX + radius * Math.cos(endAngle),
+                    center.relY + radius * Math.sin(endAngle),
+                    settings
+                );
+
+                // Add semicircle as arc
+                this.state.trajectory.add_circle(
+                    center, radius, startAngle, endAngle,
+                    this.state.penUp, startPoint, endPoint
+                );
+
+                this.state.points.push(endPoint);
+                this.state.semicircleStart = null;
+                this.state.saveState();
+            }
+        } else if (currentTool === TOOLS.FULLCIRCLE) {
+            if (!this.state.fullcircleStart) {
+                // First click - set center
+                // If we have previous points, use the last one as center
+                if (this.state.points.length > 0) {
+                    this.state.fullcircleStart = this.state.points[this.state.points.length - 1];
+                } else {
+                    this.state.fullcircleStart = new Point(x, y, settings);
+                    this.state.points.push(this.state.fullcircleStart);
+                }
+            } else {
+                // Second click - define radius and create full circle
+                const center = this.state.fullcircleStart;
+                const radiusPoint = new Point(x, y, settings);
+
+                // Calculate radius in PIXEL coordinates
+                const dx = radiusPoint.relX - center.relX;
+                const dy = radiusPoint.relY - center.relY;
+                const radius = Math.sqrt(dx * dx + dy * dy);
+
+                // Calculate start angle (from center to radius point)
+                const startAngle = Math.atan2(dy, dx);
+                const endAngle = startAngle + 2 * Math.PI; // 360 degrees = full circle
+
+                // Create start point (same as end point for full circle)
+                const startPoint = new Point(
+                    center.relX + radius * Math.cos(startAngle),
+                    center.relY + radius * Math.sin(startAngle),
+                    settings
+                );
+
+                // Add full circle
+                this.state.trajectory.add_circle(
+                    center, radius, startAngle, endAngle,
+                    this.state.penUp, startPoint, startPoint
+                );
+
+                this.state.points.push(startPoint);
+                this.state.fullcircleStart = null;
+                this.state.saveState();
             }
         }
 
@@ -231,6 +361,65 @@ export class CanvasHandler {
         this.ctx.fill();
     }
 
+    drawGrid() {
+        if (!this.state.showGrid) return;
+
+        const ctx = this.ctx;
+        const width = parseFloat(this.canvas.style.width);
+        const height = parseFloat(this.canvas.style.height);
+        const gridSize = this.state.gridSize;
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+
+        // Vertical lines
+        for (let x = 0; x < width; x += gridSize) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height);
+            ctx.stroke();
+        }
+
+        // Horizontal lines
+        for (let y = 0; y < height; y += gridSize) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
+        }
+    }
+
+    drawCoordinates() {
+        const ctx = this.ctx;
+        const settings = this.state.settings;
+
+        // Convert mouse position to world coordinates
+        const worldX = (this.mouseX - settings.origin.x) * settings.m_p;
+        const worldY = -(this.mouseY - settings.origin.y) * settings.m_p; // Y is flipped
+
+        // Draw background box
+        const padding = 10;
+        const boxX = padding;
+        const boxY = padding;
+        const text = `X: ${worldX.toFixed(3)}m  Y: ${worldY.toFixed(3)}m`;
+
+        ctx.font = '14px monospace';
+        const metrics = ctx.measureText(text);
+        const boxWidth = metrics.width + 20;
+        const boxHeight = 30;
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+        // Draw text
+        ctx.fillStyle = '#00e5ff';
+        ctx.fillText(text, boxX + 10, boxY + 20);
+    }
+
     drawToolPreview() {
         const ctx = this.ctx;
         const settings = this.state.settings;
@@ -344,6 +533,75 @@ export class CanvasHandler {
                 ctx.setLineDash([]);
             }
         }
+        else if (this.state.tool === TOOLS.RECTANGLE) {
+            if (this.state.rectangleStart) {
+                // Preview rectangle while dragging
+                const p1 = this.state.rectangleStart;
+                const corners = calculateRectangle(p1, new Point(mouseX, mouseY, settings), settings);
+
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(0, 229, 255, 0.6)';
+                ctx.setLineDash([5, 5]);
+                ctx.lineWidth = 2;
+
+                // Draw rectangle outline
+                ctx.moveTo(corners[0].relX, corners[0].relY);
+                for (let i = 1; i < corners.length; i++) {
+                    ctx.lineTo(corners[i].relX, corners[i].relY);
+                }
+                ctx.closePath();
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+        else if (this.state.tool === TOOLS.SEMICIRCLE) {
+            if (this.state.semicircleStart) {
+                // Preview semicircle while defining radius
+                const center = this.state.semicircleStart;
+                const dx = mouseX - center.relX;
+                const dy = mouseY - center.relY;
+                const radius = Math.sqrt(dx * dx + dy * dy);
+                const startAngle = Math.atan2(dy, dx);
+                const endAngle = startAngle + Math.PI;
+
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(255, 165, 0, 0.7)'; // Orange for semicircle
+                ctx.setLineDash([5, 5]);
+                ctx.lineWidth = 2;
+                ctx.arc(center.relX, center.relY, radius, startAngle, endAngle, false);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Draw center point
+                ctx.beginPath();
+                ctx.fillStyle = 'rgba(255, 165, 0, 0.5)';
+                ctx.arc(center.relX, center.relY, 3, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
+        else if (this.state.tool === TOOLS.FULLCIRCLE) {
+            if (this.state.fullcircleStart) {
+                // Preview full circle while defining radius
+                const center = this.state.fullcircleStart;
+                const dx = mouseX - center.relX;
+                const dy = mouseY - center.relY;
+                const radius = Math.sqrt(dx * dx + dy * dy);
+
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(0, 255, 127, 0.7)'; // Green for full circle
+                ctx.setLineDash([5, 5]);
+                ctx.lineWidth = 2;
+                ctx.arc(center.relX, center.relY, radius, 0, 2 * Math.PI);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Draw center point
+                ctx.beginPath();
+                ctx.fillStyle = 'rgba(0, 255, 127, 0.5)';
+                ctx.arc(center.relX, center.relY, 3, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+        }
     }
 
     animate() {
@@ -355,6 +613,9 @@ export class CanvasHandler {
         ctx.clearRect(0, 0, width, height);
 
         this.drawBackground();
+
+        // Draw Grid (if enabled)
+        this.drawGrid();
 
         // Draw Sent Data (Ghost)
         if (this.state.sentTrajectory) this.state.sentTrajectory.draw(ctx);
@@ -372,6 +633,9 @@ export class CanvasHandler {
 
         // Tool Preview
         this.drawToolPreview();
+
+        // Draw Coordinates (always on top)
+        this.drawCoordinates();
 
         requestAnimationFrame(() => this.animate());
     }

@@ -44,9 +44,36 @@
 
             <div class="control-group">
                 <div class="group-title">Drawing Tools</div>
-                <button id="line-btn" class="btn active" data-tool="line">Line Tool</button>
-                <button id="circle-btn" class="btn" data-tool="circle">Circle Tool</button>
-                <button id="penup-btn" class="btn">Toggle Pen Up</button>
+
+                <!-- Main Drawing Tools -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 10px;">
+                    <button id="line-btn" class="btn active" data-tool="line" title="Line Tool (L)">📏 Line</button>
+                    <button id="circle-btn" class="btn" data-tool="circle" title="Circle Tool (C)">⭕ Circle</button>
+                    <button id="rectangle-btn" class="btn" data-tool="rectangle" title="Rectangle Tool (R)">▭
+                        Rectangle</button>
+                    <button id="polygon-btn" class="btn" data-tool="polygon" title="Polygon Tool (P)" disabled>⬡
+                        Polygon</button>
+                    <button id="semicircle-btn" class="btn" data-tool="semicircle" title="Semicircle Tool (S)">🌙
+                        Semicircle</button>
+                    <button id="fullcircle-btn" class="btn" data-tool="fullcircle" title="Full Circle Tool (O)">⚫ Full
+                        Circle</button>
+                </div>
+
+                <!-- Pen Control -->
+                <button id="penup-btn" class="btn" title="Toggle Pen Up/Down">✏️ Toggle Pen Up</button>
+
+                <!-- Action Buttons -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 10px;">
+                    <button id="undo-btn" class="btn sm" title="Undo (Ctrl+Z)">↶ Undo</button>
+                    <button id="redo-btn" class="btn sm" title="Redo (Ctrl+Y)">↷ Redo</button>
+                    <button id="clear-btn" class="btn sm" title="Clear Drawing (Delete)">🗑️ Clear</button>
+                </div>
+
+                <!-- Grid Options -->
+                <div style="margin-top: 10px;">
+                    <button id="grid-toggle-btn" class="btn sm" title="Toggle Grid (G)">⊞ Grid: OFF</button>
+                    <button id="snap-toggle-btn" class="btn sm" title="Toggle Snap to Grid">🧲 Snap: OFF</button>
+                </div>
             </div>
 
             <div class="control-group">
@@ -111,9 +138,32 @@
             </div>
 
             <div class="control-group">
+                <div class="group-title">Saved Templates</div>
+
+                <div class="input-row">
+                    <input type="text" id="template-name" placeholder="Filename..." class="input-full"
+                        style="margin-bottom: 5px;">
+                    <button id="save-template-btn" class="btn sm">Save</button>
+                </div>
+
+                <div class="input-row">
+                    <select id="template-select" class="input-full" style="margin-bottom: 5px;">
+                        <option value="">Select Template...</option>
+                    </select>
+                    <button id="load-template-btn" class="btn sm">Load</button>
+                    <button id="delete-template-btn" class="btn sm"
+                        style="background-color: #e74c3c; color: white;">Delete</button>
+                </div>
+                <div class="input-row" style="justify-content: flex-end;">
+                    <button id="refresh-templates-btn" class="btn sm" style="font-size: 0.7em;">↻ Refresh</button>
+                </div>
+            </div>
+
+            <div class="control-group">
                 <div class="group-title">Commands</div>
                 <button id="send-data-btn" class="btn primary">Send Trajectory</button>
-                <button id="stop-traj-btn" class="btn" style="background-color: #e74c3c; color: white;">Arresta Traiettoria</button>
+                <button id="stop-traj-btn" class="btn" style="background-color: #e74c3c; color: white;">Arresta
+                    Traiettoria</button>
                 <div style="height: 5px;"></div>
                 <button id="homing-btn" class="btn">Homing</button>
                 <button id="repeatable-btn" class="btn">Demo Trajectory</button>

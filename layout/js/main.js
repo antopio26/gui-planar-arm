@@ -23,7 +23,17 @@ const ui = {
 
     btnLine: document.getElementById('line-btn'),
     btnCircle: document.getElementById('circle-btn'),
+    btnRectangle: document.getElementById('rectangle-btn'),
+    btnPolygon: document.getElementById('polygon-btn'),
+    btnSemicircle: document.getElementById('semicircle-btn'),
+    btnFullcircle: document.getElementById('fullcircle-btn'),
     btnPen: document.getElementById('penup-btn'),
+
+    btnUndo: document.getElementById('undo-btn'),
+    btnRedo: document.getElementById('redo-btn'),
+    btnClear: document.getElementById('clear-btn'),
+    btnGridToggle: document.getElementById('grid-toggle-btn'),
+    btnSnapToggle: document.getElementById('snap-toggle-btn'),
 
     btnSend: document.getElementById('send-data-btn'),
     btnStop: document.getElementById('stop-traj-btn'),
@@ -59,7 +69,16 @@ const ui = {
     warningMsg: document.getElementById('text-warning'),
     btnGenerate: document.getElementById('generate-text-btn'),
     btnNewline: document.getElementById('newline-btn'),
+    btnNewline: document.getElementById('newline-btn'),
     btnClean: document.getElementById('clean-text-btn'),
+
+    // Saved Templates
+    inputTemplateName: document.getElementById('template-name'),
+    selectTemplate: document.getElementById('template-select'),
+    btnSaveTemplate: document.getElementById('save-template-btn'),
+    btnLoadTemplate: document.getElementById('load-template-btn'),
+    btnDeleteTemplate: document.getElementById('delete-template-btn'),
+    btnRefreshTemplates: document.getElementById('refresh-templates-btn'),
 };
 
 // --- Event Listeners ---
@@ -81,10 +100,64 @@ ui.btnCircle.addEventListener('click', () => {
     updateToolUI();
 });
 
+ui.btnRectangle.addEventListener('click', () => {
+    setTool(TOOLS.RECTANGLE);
+    updateToolUI();
+});
+
+ui.btnPolygon.addEventListener('click', () => {
+    setTool(TOOLS.POLYGON);
+    updateToolUI();
+});
+
+ui.btnSemicircle.addEventListener('click', () => {
+    setTool(TOOLS.SEMICIRCLE);
+    updateToolUI();
+});
+
+ui.btnFullcircle.addEventListener('click', () => {
+    setTool(TOOLS.FULLCIRCLE);
+    updateToolUI();
+});
+
 ui.btnPen.addEventListener('click', () => {
     state.penUp = !state.penUp;
     ui.btnPen.classList.toggle('active', state.penUp);
-    ui.btnPen.textContent = state.penUp ? "Pen Up (Active)" : "Toggle Pen Up";
+    ui.btnPen.textContent = state.penUp ? "✏️ Pen Up (Active)" : "✏️ Toggle Pen Up";
+});
+
+// Undo/Redo/Clear
+ui.btnUndo.addEventListener('click', () => {
+    state.undo();
+    updateUndoRedoUI();
+});
+
+ui.btnRedo.addEventListener('click', () => {
+    state.redo();
+    updateUndoRedoUI();
+});
+
+ui.btnClear.addEventListener('click', () => {
+    if (confirm('Clear all drawing? This cannot be undone.')) {
+        state.resetDrawing();
+        state.history = [];
+        state.historyIndex = -1;
+        state.rectangleStart = null;
+        updateUndoRedoUI();
+    }
+});
+
+// Grid Controls
+ui.btnGridToggle.addEventListener('click', () => {
+    state.showGrid = !state.showGrid;
+    ui.btnGridToggle.textContent = state.showGrid ? '⊞ Grid: ON' : '⊞ Grid: OFF';
+    ui.btnGridToggle.classList.toggle('active', state.showGrid);
+});
+
+ui.btnSnapToggle.addEventListener('click', () => {
+    state.snapToGrid = !state.snapToGrid;
+    ui.btnSnapToggle.textContent = state.snapToGrid ? '🧲 Snap: ON' : '🧲 Snap: OFF';
+    ui.btnSnapToggle.classList.toggle('active', state.snapToGrid);
 });
 
 // Commands
@@ -361,16 +434,288 @@ ui.btnClean.addEventListener('click', () => {
     console.log("Workspace Cleared");
 });
 
+// --- Template System ---
+
+async function refreshTemplateList() {
+    try {
+        const files = await API.listTemplates();
+        ui.selectTemplate.innerHTML = '<option value="">Select Template...</option>';
+
+        if (!files || files.length === 0) {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = '(No templates saved)';
+            option.disabled = true;
+            ui.selectTemplate.appendChild(option);
+            return;
+        }
+
+        files.forEach(f => {
+            const option = document.createElement('option');
+            option.value = f;
+            option.textContent = f;
+            ui.selectTemplate.appendChild(option);
+        });
+
+        console.log(`Loaded ${files.length} template(s)`);
+    } catch (error) {
+        console.error('Error refreshing template list:', error);
+        ui.selectTemplate.innerHTML = '<option value="">Error loading templates</option>';
+    }
+}
+
+function getTrajectoryPayload() {
+    // Collect data to save in the correct format for backend
+    // Priority order:
+    // 1. generatedTextPatches (from text generation or loaded templates)
+    // 2. trajectory.data (from manual drawing with tools)
+
+    const payload = [];
+
+    // Check if we have generated/loaded patches first
+    if (state.generatedTextPatches && state.generatedTextPatches.length > 0) {
+        // These are already in the correct format
+        return [...state.generatedTextPatches];
+    }
+
+    // Otherwise, convert trajectory.data to payload format
+    if (!state.trajectory || !state.trajectory.data || state.trajectory.data.length === 0) {
+        return payload; // Empty
+    }
+
+    for (let t of state.trajectory.data) {
+        if (t.type === 'line') {
+            const p0 = t.data[0];
+            const p1 = t.data[1];
+            const penup = t.data[2];
+
+            // Ensure points have actX and actY properties
+            if (!p0 || !p1 || p0.actX === undefined || p1.actX === undefined) {
+                console.warn('Skipping invalid line data:', t);
+                continue;
+            }
+
+            payload.push({
+                'type': 'line',
+                'points': [[p0.actX, p0.actY], [p1.actX, p1.actY]],
+                'data': { 'penup': penup || false }
+            });
+
+        } else if (t.type === 'circle') {
+            const c = t.data[0];
+            const r = t.data[1];
+            const theta0 = t.data[2];
+            const theta1 = t.data[3];
+            const penup = t.data[4];
+
+            // Validate circle data
+            if (!c || c.actX === undefined || !r) {
+                console.warn('Skipping invalid circle data:', t);
+                continue;
+            }
+
+            // --- Circle Sampling Logic ---
+            // Convert circle to line segments for saving
+
+            // Determine Direction (same as Trajectory.draw)
+            const A = theta0 > theta1;
+            const B = Math.abs(theta1 - theta0) < Math.PI;
+            const ccw = (!A && !B) || (A && B); // XNOR
+
+            // Calculate valid Delta Angle
+            let delta = theta1 - theta0;
+            if (ccw) {
+                if (delta <= 0) delta += 2 * Math.PI;
+            } else {
+                if (delta >= 0) delta -= 2 * Math.PI;
+            }
+
+            // Determine steps (approx 1 step per 5 degrees or min 20)
+            const steps = Math.max(20, Math.ceil(Math.abs(delta) * (180 / Math.PI) / 5));
+
+            let prevX = c.actX + r * Math.cos(theta0);
+            let prevY = c.actY + r * Math.sin(theta0);
+
+            for (let i = 1; i <= steps; i++) {
+                const t_param = i / steps;
+                const angle = theta0 + delta * t_param;
+
+                const currX = c.actX + r * Math.cos(angle);
+                const currY = c.actY + r * Math.sin(angle);
+
+                payload.push({
+                    'type': 'line',
+                    'points': [[prevX, prevY], [currX, currY]],
+                    'data': { 'penup': penup || false }
+                });
+
+                prevX = currX;
+                prevY = currY;
+            }
+        }
+    }
+
+    return payload;
+}
+
+// Save Template
+ui.btnSaveTemplate.addEventListener('click', async () => {
+    const items = getTrajectoryPayload();
+    let name = ui.inputTemplateName.value.trim();
+
+    // Validation
+    if (!name) {
+        alert("Please enter a template name!");
+        ui.inputTemplateName.focus();
+        return;
+    }
+
+    if (items.length === 0) {
+        alert("Nothing to save! Draw something first.");
+        return;
+    }
+
+    // Add .json extension if not present
+    if (!name.endsWith('.json')) {
+        name += '.json';
+    }
+
+    console.log(`Saving template "${name}" with ${items.length} items...`);
+
+    try {
+        const res = await API.saveTemplate(name, items);
+        if (res.success) {
+            alert(`✓ Template "${name}" saved successfully!`);
+            ui.inputTemplateName.value = ''; // Clear input
+            await refreshTemplateList();
+        } else {
+            alert("Error saving template: " + (res.message || "Unknown error"));
+        }
+    } catch (error) {
+        console.error('Save template error:', error);
+        alert("Error saving template: " + error.message);
+    }
+});
+
+// Load Template
+ui.btnLoadTemplate.addEventListener('click', async () => {
+    const name = ui.selectTemplate.value;
+
+    if (!name) {
+        alert("Please select a template to load!");
+        return;
+    }
+
+    console.log(`Loading template "${name}"...`);
+
+    try {
+        const res = await API.loadTemplate(name);
+
+        if (!res.success) {
+            alert("Error loading template: " + (res.message || "Unknown error"));
+            return;
+        }
+
+        if (!res.data || res.data.length === 0) {
+            alert("Template is empty or invalid!");
+            return;
+        }
+
+        // Clear current drawing first
+        state.resetDrawing();
+        state.history = [];
+        state.historyIndex = -1;
+        state.rectangleStart = null;
+        state.sentPoints = [];
+        state.sentTrajectory.reset();
+
+        // Load the template data
+        const patches = res.data;
+
+        // Store in both textPreview (for visualization) and generatedTextPatches (for saving/sending)
+        state.textPreview = patches;
+        state.generatedTextPatches = patches;
+
+        // Clear text input since we're loading a template
+        if (ui.inputText) {
+            ui.inputText.value = '';
+        }
+
+        console.log(`✓ Template "${name}" loaded successfully with ${patches.length} items`);
+        alert(`✓ Template "${name}" loaded successfully!`);
+
+        updateUndoRedoUI();
+
+    } catch (error) {
+        console.error('Load template error:', error);
+        alert("Error loading template: " + error.message);
+    }
+});
+
+// Delete Template
+ui.btnDeleteTemplate.addEventListener('click', async () => {
+    const name = ui.selectTemplate.value;
+
+    if (!name) {
+        alert("Please select a template to delete!");
+        return;
+    }
+
+    // Confirmation dialog
+    if (!confirm(`Are you sure you want to delete "${name}"?\n\nThis action cannot be undone.`)) {
+        return;
+    }
+
+    console.log(`Deleting template "${name}"...`);
+
+    try {
+        const res = await API.deleteTemplate(name);
+
+        if (res.success) {
+            console.log(`✓ Template "${name}" deleted successfully`);
+            alert(`✓ Template "${name}" deleted successfully!`);
+
+            // Clear selection
+            ui.selectTemplate.value = '';
+
+            // Refresh list
+            await refreshTemplateList();
+        } else {
+            alert("Error deleting template: " + (res.message || "Unknown error"));
+        }
+    } catch (error) {
+        console.error('Delete template error:', error);
+        alert("Error deleting template: " + error.message);
+    }
+});
+
+ui.btnRefreshTemplates.addEventListener('click', refreshTemplateList);
+
+// Initial Load
+refreshTemplateList();
+
 // --- Helper Functions ---
 
 function setTool(tool) {
     state.tool = tool;
     state.circleDefinition = []; // Reset partials
+    state.rectangleStart = null; // Reset rectangle start
+    state.semicircleStart = null; // Reset semicircle start
+    state.fullcircleStart = null; // Reset fullcircle start
 }
 
 function updateToolUI() {
     ui.btnLine.classList.toggle('active', state.tool === TOOLS.LINE);
     ui.btnCircle.classList.toggle('active', state.tool === TOOLS.CIRCLE);
+    ui.btnRectangle.classList.toggle('active', state.tool === TOOLS.RECTANGLE);
+    ui.btnPolygon.classList.toggle('active', state.tool === TOOLS.POLYGON);
+    ui.btnSemicircle.classList.toggle('active', state.tool === TOOLS.SEMICIRCLE);
+    ui.btnFullcircle.classList.toggle('active', state.tool === TOOLS.FULLCIRCLE);
+}
+
+function updateUndoRedoUI() {
+    ui.btnUndo.disabled = !state.canUndo();
+    ui.btnRedo.disabled = !state.canRedo();
 }
 
 async function updateSerialStatus() {
@@ -425,6 +770,18 @@ API.initCallbacks({
     onGetData: () => {
         const payload = [];
 
+        // 1. Check for Generated/Loaded Patches (High Priority)
+        // This handles Text AND Loaded Templates
+        if (state.generatedTextPatches && state.generatedTextPatches.length > 0) {
+            // They are already in the correct format!
+            // Just return a copy
+            // Move to Sent first?
+            state.sentPoints = []; // Visualization only supports points...
+            // state.sentTrajectory...
+            return state.generatedTextPatches;
+        }
+
+        // 2. Fallback to Manual Drawing (state.trajectory)
         for (let t of state.trajectory.data) {
             let item = {};
 
@@ -475,3 +832,64 @@ API.initCallbacks({
 // Initial Status Check
 updateSerialStatus();
 setInterval(updateSerialStatus, 2000); // Polling status
+
+// Initial UI Update
+updateUndoRedoUI();
+
+// --- Keyboard Shortcuts ---
+document.addEventListener('keydown', (e) => {
+    // Ignore if typing in input fields
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    // Ctrl/Cmd + Z: Undo
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        state.undo();
+        updateUndoRedoUI();
+    }
+
+    // Ctrl/Cmd + Y or Ctrl/Cmd + Shift + Z: Redo
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        state.redo();
+        updateUndoRedoUI();
+    }
+
+    // Tool shortcuts (only if not holding Ctrl/Cmd)
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        switch (e.key.toLowerCase()) {
+            case 'l':
+                setTool(TOOLS.LINE);
+                updateToolUI();
+                break;
+            case 'c':
+                setTool(TOOLS.CIRCLE);
+                updateToolUI();
+                break;
+            case 'r':
+                setTool(TOOLS.RECTANGLE);
+                updateToolUI();
+                break;
+            case 'p':
+                if (!ui.btnPolygon.disabled) {
+                    setTool(TOOLS.POLYGON);
+                    updateToolUI();
+                }
+                break;
+            case 's':
+                setTool(TOOLS.SEMICIRCLE);
+                updateToolUI();
+                break;
+            case 'o':
+                setTool(TOOLS.FULLCIRCLE);
+                updateToolUI();
+                break;
+            case 'g':
+                ui.btnGridToggle.click();
+                break;
+            case 'delete':
+                ui.btnClear.click();
+                break;
+        }
+    }
+});

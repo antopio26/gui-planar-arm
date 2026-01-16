@@ -5,6 +5,7 @@ from typing import List, Dict, Optional
 class FirmwareState:
     q0: float = 0.0
     q1: float = 0.0
+    pen_up: bool = True
     buffer_level: int = 0
     last_update: float = 0
     

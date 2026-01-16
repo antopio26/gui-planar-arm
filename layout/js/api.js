@@ -41,6 +41,26 @@ export const API = {
         return await window.eel.py_clear_state()();
     },
 
+    async saveTemplate(filename, data) {
+        if (!window.eel) return false;
+        return await window.eel.py_save_template(filename, data)();
+    },
+
+    async loadTemplate(filename) {
+        if (!window.eel) return null;
+        return await window.eel.py_load_template(filename)();
+    },
+
+    async listTemplates() {
+        if (!window.eel) return [];
+        return await window.eel.py_list_templates()();
+    },
+
+    async deleteTemplate(filename) {
+        if (!window.eel) return { success: false, message: "Eel not available" };
+        return await window.eel.py_delete_template(filename)();
+    },
+
     async stopTrajectory() {
         if (!window.eel) return false;
         return await window.eel.py_stop_trajectory()();
