@@ -72,7 +72,7 @@ FONT_DEFS = {
     'J': [{'type': 'line', 'points': [(0.8, 1), (0.8, 0.3)]},
           {'type': 'ellipse', 'center': (0.4, 0.3), 'radii': (0.4, 0.3), 'arc': (0, -180)}],
 
-    'O': [{'type': 'ellipse', 'center': (0.5, 0.5), 'radii': (0.5, 0.5), 'arc': (0, 360)}],
+    'O': [{'type': 'ellipse', 'center': (0.5, 0.5), 'radii': (0.5, 0.5), 'arc': (0, -360)}],
     
     'P': [{'type': 'line', 'points': [(0,0), (0,1)]}, 
           {'type': 'line', 'points': [(0,1), (0.5,1)]},
@@ -138,10 +138,10 @@ def sample_ellipse(center, radii, arc, steps=None):
     end_rad = math.radians(arc[1])
     
     # Adaptive resolution if steps not provided
-    # Aim for ~5-10 degrees per step for smoothness
+    # Aim for ~2 degrees per step for high smoothness (Ultra Quality)
     if steps is None:
         span_deg = abs(arc[1] - arc[0])
-        steps = max(8, int(span_deg / 5)) # Every 5 degrees -> 72 points for a circle
+        steps = max(20, int(span_deg / 2)) # Every 2 degrees -> 180 points for a circle
     
     points = []
     

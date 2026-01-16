@@ -109,3 +109,57 @@ Ecco un riepilogo delle tecnologie di interpolazione presenti nel codice (`lib/t
         *   **S**: Archi estesi (30° top / 150° bottom) per eleganza.
         *   **3**: Doppio lobo asimmetrico raccordato.
         *   **U**: Fondo convesso (180°-360°).
+
+### K. EVOLUZIONE INTERFACCIA (CHANGELOG UI COMPLETO)
+Dall'introduzione della capacità di scrittura, l'interfaccia utente è stata trasformata da semplice pannello di controllo a workstation di design completa. Ecco cosa è stato aggiunto:
+
+#### 1. Nuovi Controlli Scrittura (Sidebar)
+*   **Selettore Workspace**: Tre pulsanti dedicati ("Linear", "Curved", "Clean") per cambiare modalità istantaneamente e resettare lo stato.
+*   **Input Testo**: Casella di testo multi-linea con generazione automatica.
+*   **Parametri Font**: Controlli numerici per *Font Size* e *Spacing*.
+*   **Configurazione Foglio (Linear Mode)**: Quattro input ("Sheet X", "Y", "W", "H") per definire esattamente dove scrivere sul tavolo.
+
+#### 2. Visualizzazione Avanzata (Canvas)
+*   **Anteprima Realistica (WYSIWYG)**: Il testo appare in tempo reale mentre digiti.
+*   **Color-Coding**:
+    *   **Bianco**: Testo generato.
+    *   **Arancione Tratteggiato**: Movimenti di spostamento a penna alzata (Pen Up).
+    *   **Ciano**: Traiettoria effettivamente inviata al robot (feedback di conferma).
+    *   **Verde**: Area di lavoro sicura (Foglio virtuale o Ciambella).
+    *   **Rosso Scuro**: Punti fuori dai limiti (segnalazione errore).
+
+#### 3. Pannello Comandi e Sicurezza
+*   **Simulazione Offline**: I comandi funzionano anche senza robot, simulando il movimento.
+*   **Arresta Traiettoria (Rosso)**: Bottone di emergenza per fermare tutto.
+*   **Homing (Blu)**: Ritorno automatico a zero con traiettoria fluida.
+*   **Clean (Giallo)**: "Lavagna pulita", resetta errori, ghost tracks e input.
+
+#### 4. Feedback Utente
+*   **Stato Seriale**: Icona connessione in alto a destra (Verde = Online, Rossa = Offline).
+
+### L. ARCHITETTURA DI SICUREZZA & ROBUSTEZZA (BACKEND INTERNALS)
+Oltre all'interfaccia visibile, sono stati implementati vari livello di protezione "sotto il cofano" per garantire l'integrità del sistema e prevenire danni hardware:
+
+#### 1. Validazione Geometrica Preventiva
+Prima ancora di inviare i dati, la funzione `py_validate_text` scansiona ogni singolo punto della traiettoria generata.
+*   **Logica**: Verifica che la distanza dall'origine sia sempre compresa tra `R_min` e `R_max` (definiti dalle lunghezze fisiche `l1` e `l2`).
+*   **Effetto**: Se anche solo un punto esce dai limiti (raggiungibilità), l'intera operazione viene bloccata con un messaggio di errore, prevenendo errori di singolarità cinematica.
+
+#### 2. Integrità Dati (CRC32)
+Il protocollo binario (`lib/binary_protocol.py`) non si fida ciecamente dei dati ricevuti.
+*   Ogni pacchetto di feedback sulla posizione (`RESP_POS`) include un checksum **CRC32**.
+*   Se i dati seriali sono corrotti (rumore elettrico), il pacchetto viene scartato silenziosamente invece di causare comportamenti erratici nell'UI.
+
+#### 3. Limiti Fisici Hard-Coded
+Nel file `config.py` sono definiti i limiti invalicabili del robot:
+*   `MAX_SPEED_RAD = 10.0 rad/s`: Velocità angolare massima di sicurezza.
+*   `MAX_ACC_TOLERANCE`: Fattore di sicurezza per le accelerazioni.
+*   Il motore di validazione (`validate_trajectory`) usa questi valori per "bocciare" traiettorie, che anche se geometricamente valide, richiederebbero movimenti troppo bruschi.
+
+#### 4. Gestione Stato Atomica
+La funzione `py_clear_state` (pulsante "Clean") esegue un reset profondo:
+*   Cancella i buffer di registrazione.
+*   Resetta l'ultimo stato noto (`last_known_q`).
+*   Interrompe i flag di registrazione attiva.
+Questo previene il tipico problema di "stato sporco" dove il robot crede di essere in una posizione diversa da quella reale dopo un errore.
+*   **Console Log**: Messaggi di errore o conferma appaiono nella console del browser e del terminale.

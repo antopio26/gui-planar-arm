@@ -136,6 +136,12 @@ class SerialManager:
                         
                         sent_count = limit
                         
+                        # Update State for UI Visualization (Commanded Position)
+                        # This allows seeing the arm move even if feedback is silent
+                        current_idx = limit - 1
+                        state.firmware.q0 = data['q'][0][current_idx]
+                        state.firmware.q1 = data['q'][1][current_idx]
+                        
                         if sent_count % 100 == 0:
                             print(f"Progress: {sent_count}/{num_points}")
 
@@ -143,6 +149,10 @@ class SerialManager:
                          print("Execution stopped.")
                     else:
                         print(f"TRJ SENT COMPLETE: {num_points} points")
+                        # Ensure final position is set
+                        state.firmware.q0 = data['q'][0][-1]
+                        state.firmware.q1 = data['q'][1][-1]
+                        
                         # Wait for the trajectory to finish physically
                         total_duration = num_points * SETTINGS['Tc']
                         elapsed = time() - start_time
@@ -172,6 +182,12 @@ class SerialManager:
                         state.firmware.q1 = data['q'][1][i]
                         state.firmware.last_update = loop_start
                         
+                        # Notify UI (Animation)
+                        try:
+                            eel.js_draw_pose([state.firmware.q0, state.firmware.q1])
+                        except:
+                            pass # Ignore if eel closed
+
                         if state.recording_active:
                             state.rec_data['q0'].append(state.firmware.q0)
                             state.rec_data['q1'].append(state.firmware.q1)
