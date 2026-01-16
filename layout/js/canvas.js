@@ -264,11 +264,13 @@ export class CanvasHandler {
                     ctx.moveTo(x0, y0);
                     ctx.lineTo(x1, y1);
                     if (patch.data.penup) {
-                        ctx.strokeStyle = 'rgba(255, 255, 0, 0.3)'; // Yellow faint for jumps
-                        ctx.setLineDash([2, 5]);
+                        ctx.strokeStyle = 'rgba(255, 165, 0, 0.8)'; // Orange visible for jumps
+                        ctx.setLineDash([5, 5]);
+                        ctx.lineWidth = 1.5;
                     } else {
                         ctx.strokeStyle = '#ffffff';
                         ctx.setLineDash([]);
+                        ctx.lineWidth = 2.0;
                     }
                     ctx.stroke();
                 }

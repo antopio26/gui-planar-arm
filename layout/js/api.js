@@ -36,6 +36,16 @@ export const API = {
         return await window.eel.py_validate_text(text, options)();
     },
 
+    async clearState() {
+        if (!window.eel) return false;
+        return await window.eel.py_clear_state()();
+    },
+
+    async stopTrajectory() {
+        if (!window.eel) return false;
+        return await window.eel.py_stop_trajectory()();
+    },
+
     // Setup callbacks that Python calls
     initCallbacks(callbacks) {
         if (!window.eel) {

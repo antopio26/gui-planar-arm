@@ -1,5 +1,6 @@
 import { appState, TOOLS } from './state.js';
 import { CanvasHandler } from './canvas.js';
+import { Point } from './utils.js';
 import { API } from './api.js';
 
 // --- Initialization ---
@@ -25,6 +26,7 @@ const ui = {
     btnPen: document.getElementById('penup-btn'),
 
     btnSend: document.getElementById('send-data-btn'),
+    btnStop: document.getElementById('stop-traj-btn'),
     btnHoming: document.getElementById('homing-btn'),
     btnDemo: document.getElementById('repeatable-btn'),
 
@@ -99,6 +101,12 @@ ui.btnDemo.addEventListener('click', () => {
     // Implement demo/repeatable trajectory logic if needed
     // ...
     console.log("Demo trajectory requested");
+});
+
+// Stop Trajectory
+ui.btnStop.addEventListener('click', async () => {
+    console.log("Stopping trajectory...");
+    await API.stopTrajectory();
 });
 
 // --- Text Tool Logic ---
@@ -265,9 +273,26 @@ async function generatePreview() {
 
         if (state.textPreview.length > 0) {
             state.textPreview.forEach(patch => {
+                // Ensure we handle lines correctly (and ellipses are already Lines here)
                 if (patch.type === 'line') {
-                    const p0 = { actX: patch.points[0][0], actY: patch.points[0][1] };
-                    const p1 = { actX: patch.points[1][0], actY: patch.points[1][1] };
+                    // Create Point instances to ensure relX/relY are calculated
+                    // We receive ACTUAL coordinates from Python
+
+                    // Import Point class is needed! ensuring state.settings is passed
+                    // We assume Point is available in global scope or imported if module.
+                    // main.js imports { CanvasHandler } but Point is in utils.js?
+                    // We need to import Point from utils.js at top of main.js if not present.
+                    // Assuming imports: import { Point } from './utils.js';
+
+                    // Create dummy points first
+                    const p0 = new Point(0, 0, state.settings);
+                    p0.actX = patch.points[0][0];
+                    p0.actY = patch.points[0][1];
+
+                    const p1 = new Point(0, 0, state.settings);
+                    p1.actX = patch.points[1][0];
+                    p1.actY = patch.points[1][1];
+
                     state.trajectory.data.push({
                         type: 'line',
                         data: [p0, p1, patch.data.penup]
@@ -324,6 +349,13 @@ ui.btnClean.addEventListener('click', () => {
     state.generatedTextPatches = [];
     state.points = [];
     state.trajectory.reset();
+
+    // Clear Sent/Ghost Trajectory (User Request)
+    state.sentPoints = [];
+    state.sentTrajectory.reset();
+
+    // Clear Backend State
+    API.clearState();
 
     ui.warningMsg.classList.add('hidden');
     console.log("Workspace Cleared");

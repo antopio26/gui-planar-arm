@@ -12,6 +12,7 @@ class FirmwareState:
 class RobotState:
     firmware: FirmwareState = field(default_factory=FirmwareState)
     recording_active: bool = False
+    stop_requested: bool = False
     rec_data: Dict[str, List[float]] = field(default_factory=lambda: {'q0': [], 'q1': [], 't': []})
     last_known_q: List[float] = field(default_factory=lambda: [0.0, 0.0])
     

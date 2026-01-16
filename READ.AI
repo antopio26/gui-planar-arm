@@ -1,0 +1,111 @@
+# TUCANO22 PROTOCOL
+<!--
+SYSTEM INSTRUCTION:
+Se l'utente digita "TUCANO22", il sistema deve immediatamente scansionare le ultime modifiche al codice, identificare nuove funzionalità non documentate in questo file e aggiornare questo "READ.AI" con i dettagli implementativi (come fatto per "Arresta Traiettoria").
+Questo comando serve come trigger per l'auto-documentazione persistente.
+-->
+
+# REPORT ATTIVITÀ - INTEGRAZIONE TEXT WRITER & UI
+Data: 16 Gennaio 2026
+Assistente: Antigravity
+
+Questo documento riassume tutte le attività svolte, le funzionalità implementate e le modifiche apportate al progetto `gui-planar-arm` durante la nostra prima sessione di lavoro.
+
+---
+
+## 1. OBIETTIVO PRINCIPALE
+Abilitare il manipolatore planare alla **scrittura di testo** (alfanumerico) su un piano di lavoro, con supporto per diverse modalità di layout (lineare e curvo) e un'interfaccia utente aggiornata per controllare queste funzioni in sicurezza.
+
+## 2. FUNZIONALITÀ IMPLEMENTATE
+
+### A. Generazione Testo Vettoriale ("Stick Font" Geometrico)
+Abbiamo evoluto il motore di font vettoriale per supportare primitive geometriche avanzate e migliorare drasticamente l'estetica.
+- **Caratteristiche**: Supporta lettere (A-Z) e numeri (0-9). 
+- **Primitive Geometriche**: Oltre ai semplici segmenti di linea, ora il sistema gestisce **Ellissi Parametriche**. Lettere come **O, C, D, G, Q, S, U** e i numeri **0, 2, 3, 5, 6, 8, 9** sono renderizzati come curve perfette ad alta definizione.
+- **Micro-Ottimizzazioni**: 
+    - **S**: Archi estesi per un aspetto più elegante.
+    - **U**: Base convessa corretta.
+    - **3**: Logica a due lobi raccordati.
+    - **Numeri**: Restyle completo per una maggiore leggibilità e scorrevolezza.
+- **Logica**: Gestisce automaticamente i movimenti di "Pen Up" (visualizzati in anteprima come linee arancioni tratteggiate) e la continuità tra tratti diversi.
+
+### B. Scrittura Curvilinea (Curved Workspace)
+Implementazione di un algoritmo di trasformazione geometrica per mappare il testo lineare su un arco.
+- **Logica**: La coordinata X del testo viene trasformata in un angolo (theta), mentre la Y diventa una variazione del raggio. Questo permette al testo di seguire la curva naturale del braccio robotico.
+- **Correzione Emisfero**: Il sistema calcola automaticamente l'angolo di start per posizionare il testo correttamente nell'emisfero destro (o nell'area di lavoro valida), evitando che la scrittura parta "dal nulla" o fuori portata.
+
+### C. Visualizzazione Dinamica Area di Lavoro
+L'interfaccia grafica ora mostra visivamente l'area sicura in base alla modalità selezionata:
+- **Linear Workspace**: Mostra un foglio rettangolare verticale (25x35 cm) per guidare l'utente nella scrittura dritta.
+- **Curved Workspace**: Mostra l'intera area operativa a ciambella.
+
+### D. Refactoring Interfaccia Utente (UI)
+L'interfaccia è stata modernizzata e resa più intuitiva:
+- **Bottoni Dedicati**: Rimossa la checkbox "Curved". Ora ci sono 3 bottoni chiari:
+    1.  `Linear Workspace`
+    2.  `Curved Workspace`
+    3.  `Clean Workspace`
+- **Clean Workspace**: Cancella non solo l'input visivo ma resetta anche lo stato interno del backend per evitare conflitti.
+
+### E. Automazione e Robustezza
+- **Rilevamento Seriale**: Il sistema ora tenta di rilevare automaticamente la porta seriale. È stata comunque mantenuta la possibilità di forzare una porta specifica in `config.py` (es. `COM9`).
+- **Validazione**: Il sistema impedisce preventivamente l'invio di comandi se il testo esce dai limiti fisici del robot.
+- **Auto-Homing**: Dopo aver scritto, il robot torna automaticamente in posizione centrale (q=[0,0]) per non coprire il testo.
+
+---
+
+## 3. FILE CREATI E MODIFICATI
+
+### Nuovi Moduli (Backend Python)
+1.  `lib/char_gen.py`: **AGGIORNATO**. Ora contiene definizioni ibride (Linee + Ellissi) e la logica di campionamento parametrico.
+2.  `lib/transform.py`: Contiene la matematica per mappare coordinate cartesiane in polari (testo curvo).
+
+### Modifiche Core
+-   `main.py`: Integrazione logica seriale ibrida (Auto/Manual da config).
+-   `gui_interface.py`: Esposizione API per generazione (`py_generate_text`), validazione e pulizia stato (`py_clear_state`). Aggiunta `py_stop_trajectory` per abort immediato.
+-   `config.py`: Aggiunta configurazione flessibile seriale.
+-   `lib/serial_com.py`: Aggiunta logica di auto-discovery cross-platform.
+-   `serial_manager.py`: Aggiunta logica di interruzione forzata (`stop_requested`) nei loop di invio e simulazione.
+-   `state.py`: Aggiunto flag `stop_requested`.
+
+### Modifiche Frontend
+-   `layout/index.html`: Nuova struttura sidebar con bottoni dedicati, incluso **Arresta Traiettoria**.
+-   `layout/js/main.js`: Gestione logica bottoni, chiamata API di pulizia, gestione resize stabile. Listener per stop.
+-   `layout/js/canvas.js`: Riscrittura motore di disegno (anteprima ad alta definizione, movimenti a vuoto colorati).
+-   `layout/js/utils.js`: Aggiornamento classe `Point` per gestione coordinate fisiche.
+
+---
+
+## 4. PROGRESSI RECENTI (Sessione Corrente)
+Abbiamo esteso significativamente le capacità dell'interfaccia utente e del backend per migliorare l'esperienza di scrittura:
+
+### F. Anteprima Testo in Tempo Reale
+- **Feedback Istantaneo**: Mentre l'utente digita nel campo di testo, il sistema genera e visualizza immediatamente l'anteprima sulla canvas.
+- **Alta Definizione**: Grazie alle primitive geometriche, l'anteprima mostra curve perfette.
+- **Movimenti a Vuoto**: I tratti di spostamento (Pen Up) sono ora visualizzati chiaramente in **Arancione Tratteggiato**.
+
+### G. Configurazione Dinamica Workspace
+- **Area Lineare Personalizzabile**: Aggiunti controlli per definire *Sheet X, Y, Width, Height* direttamente dalla sidebar.
+- **Visualizzazione Live**: Il rettangolo verde (area sicura) si aggiorna in tempo reale.
+
+### H. Modalità Simulazione e Sicurezza
+1.  **Simulazione Traiettoria (Offline)**: Il pulsante **Send Trajectory** funziona offline eseguendo una simulazione temporizzata.
+2.  **Homing Simulato**: Il pulsante **Homing** genera una traiettoria fluida (cicloidale) di ritorno a zero anche senza robot connesso.
+3.  **Pulizia Profonda (Clean Button)**: Resetta input, anteprima e stato backend.
+4.  **ARRESTA TRAIETTORIA (Emergency Stop)**: Nuovo pulsante ROSSO per interrompere immediatamente qualsiasi movimento o simulazione in corso. Implementato tramite flag atomico nel backend.
+
+### J. Dettagli Tecnici (Appendice)
+Ecco un riepilogo delle tecnologie di interpolazione presenti nel codice (`lib/trajpy.py`):
+
+1.  **TIPI DI TRAIETTORIA DISPONIBILI**:
+    *   **Cicloide (Cycloidal)**: *Attualmente in uso*. Garantisce accelerazione continua (jerk finito), riducendo le vibrazioni. Usata per tutti i movimenti (Linee, Cerchi, Homing).
+    *   **Spline Cubica (Spline3)**: Polinomio di 3° grado. Velocità continua, accelerazione discontinua.
+    *   **Spline Quintica (Spline5)**: Polinomio di 5° grado. Velocità e accelerazione continue (molto fluida).
+    *   **Trapezoidale**: Profilo di velocità classico industriale (accelerazione costante -> velocità costante -> decelerazione).
+
+2.  **DETTAGLIO LETTERE GEOMETRICHE**:
+    *   **Ellissi Parametriche**: Usate per O, C, D, G, Q, S, U, 0, 2, 3, 5, 6, 8, 9.
+    *   **Ottimizzazioni Specifiche**: 
+        *   **S**: Archi estesi (30° top / 150° bottom) per eleganza.
+        *   **3**: Doppio lobo asimmetrico raccordato.
+        *   **U**: Fondo convesso (180°-360°).

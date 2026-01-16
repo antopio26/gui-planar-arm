@@ -8,128 +8,199 @@ Coordinates are normalized 0.0 to 1.0 within the character box.
 # Character definitions: List of strokes. 
 # Each stroke is a list of points [(x,y), (x,y), ...].
 # 'pen_up' is implicit between strokes.
+
+"""
+Vector Font Generator with Geometric Primitives
+Supports 'line' (list of points) and 'ellipse' (parametric).
+"""
+
+import math
+
+# Character definitions
+# Format: List of Primitives.
+# Primitive: 
+#   {'type': 'line', 'points': [(x,y), ...]}
+#   {'type': 'ellipse', 'center': (cx, cy), 'radii': (rx, ry), 'arc': (start_deg, end_deg)}
+#   {'type': 'ellipse_path', 'points': [...]} # Implicit path of ellipses? No, keep simple.
+
 FONT_DEFS = {
-    'A': [[(0,0), (0.5,1), (1,0)], [(0.2, 0.4), (0.8, 0.4)]],
-    'B': [[(0,0), (0,1), (0.5,1), (0.5,0.5), (0,0.5)], [(0.5,0.5), (0.5,0), (0,0)]], # Simplified B
-    'C': [[(1,0.2), (0.8,0), (0.2,0), (0,0.2), (0,0.8), (0.2,1), (0.8,1), (1,0.8)]],
-    'D': [[(0,0), (0,1), (0.6,1), (1,0.6), (1,0.4), (0.6,0), (0,0)]],
-    'E': [[(1,0), (0,0), (0,1), (1,1)], [(0,0.5), (0.8,0.5)]],
-    'F': [[(0,0), (0,1), (1,1)], [(0,0.5), (0.8,0.5)]],
-    'G': [[(1,1), (0.2,1), (0,0.8), (0,0.2), (0.2,0), (1,0), (1,0.5), (0.6,0.5)]],
-    'H': [[(0,0), (0,1)], [(1,0), (1,1)], [(0,0.5), (1,0.5)]],
-    'I': [[(0.5,0), (0.5,1)], [(0,1), (1,1)], [(0,0), (1,0)]],
-    'J': [[(0,0.3), (0.2,0), (0.6,0), (0.8,0.3), (0.8,1)]],
-    'K': [[(0,0), (0,1)], [(1,1), (0,0.5), (1,0)]],
-    'L': [[(0,1), (0,0), (1,0)]],
-    'M': [[(0,0), (0,1), (0.5,0.5), (1,1), (1,0)]],
-    'N': [[(0,0), (0,1), (1,0), (1,1)]],
-    'O': [[(0.5,0), (0,0.2), (0,0.8), (0.5,1), (1,0.8), (1,0.2), (0.5,0)]],
-    'P': [[(0,0), (0,1), (1,1), (1,0.5), (0,0.5)]],
-    'Q': [[(0.5,0), (0,0.2), (0,0.8), (0.5,1), (1,0.8), (1,0.2), (0.5,0)], [(0.6,0.2), (1,0)]],
-    'R': [[(0,0), (0,1), (1,1), (1,0.5), (0,0.5), (1,0)]],
-    'S': [[(1,1), (0.2,1), (0,0.8), (0,0.6), (1,0.4), (1,0.2), (0.8,0), (0,0)]],
-    'T': [[(0.5,0), (0.5,1)], [(0,1), (1,1)]],
-    'U': [[(0,1), (0,0.2), (0.2,0), (0.8,0), (1,0.2), (1,1)]],
-    'V': [[(0,1), (0.5,0), (1,1)]],
-    'W': [[(0,1), (0.2,0), (0.5,0.5), (0.8,0), (1,1)]],
-    'X': [[(0,0), (1,1)], [(0,1), (1,0)]],
-    'Y': [[(0,1), (0.5,0.5)], [(1,1), (0.5,0.5), (0.5,0)]],
-    'Z': [[(0,1), (1,1), (0,0), (1,0)]],
-    '0': [[(0.5,0), (0,0.2), (0,0.8), (0.5,1), (1,0.8), (1,0.2), (0.5,0), (1,1)]], # Slashed
-    '1': [[(0.2,0.8), (0.5,1), (0.5,0)], [(0.2,0), (0.8,0)]],
-    '2': [[(0,0.8), (0.2,1), (0.8,1), (1,0.8), (0,0), (1,0)]],
-    '3': [[(0,1), (1,1), (0.5,0.5), (1,0.2), (0.8,0), (0.2,0)]],
-    '4': [[(0.8,0), (0.8,1)], [(0,1), (0,0.5), (1,0.5)]],
-    '5': [[(1,1), (0,1), (0,0.6), (0.8,0.6), (1,0.4), (1,0.2), (0.8,0), (0,0)]],
-    '6': [[(1,1), (0.2,0.5), (0,0.2), (0.2,0), (0.8,0), (1,0.2), (0.8,0.5), (0.2,0.5)]],
-    '7': [[(0,1), (1,1), (0.4,0)]],
-    '8': [[(0.5,0.5), (0.2,0.8), (0.5,1), (0.8,0.8), (0.5,0.5), (0.2,0.2), (0.5,0), (0.8,0.2), (0.5,0.5)]],
-    '9': [[(0,0), (0.8,0.5), (1,0.8), (0.8,1), (0.2,1), (0,0.8), (0.2,0.5), (0.8,0.5)]],
-    ' ': [], # Space
-    '-': [[(0,0.5), (1,0.5)]],
-    '.': [[(0.4,0), (0.6,0), (0.6,0.2), (0.4,0.2), (0.4,0)]], # Box dot
+    # Straight Letters
+    'A': [{'type': 'line', 'points': [(0,0), (0.5,1), (1,0)]}, 
+          {'type': 'line', 'points': [(0.2, 0.4), (0.8, 0.4)]}],
+    'E': [{'type': 'line', 'points': [(1,0), (0,0), (0,1), (1,1)]}, 
+          {'type': 'line', 'points': [(0,0.5), (0.8,0.5)]}],
+    'F': [{'type': 'line', 'points': [(0,0), (0,1), (1,1)]}, 
+          {'type': 'line', 'points': [(0,0.5), (0.8,0.5)]}],
+    'H': [{'type': 'line', 'points': [(0,0), (0,1)]}, 
+          {'type': 'line', 'points': [(1,0), (1,1)]}, 
+          {'type': 'line', 'points': [(0,0.5), (1,0.5)]}],
+    'I': [{'type': 'line', 'points': [(0.5,0), (0.5,1)]}, 
+          {'type': 'line', 'points': [(0,1), (1,1)]}, 
+          {'type': 'line', 'points': [(0,0), (1,0)]}],
+    'K': [{'type': 'line', 'points': [(0,0), (0,1)]}, 
+          {'type': 'line', 'points': [(1,1), (0,0.5), (1,0)]}],
+    'L': [{'type': 'line', 'points': [(0,1), (0,0), (1,0)]}],
+    'M': [{'type': 'line', 'points': [(0,0), (0,1), (0.5,0.5), (1,1), (1,0)]}],
+    'N': [{'type': 'line', 'points': [(0,0), (0,1), (1,0), (1,1)]}],
+    'T': [{'type': 'line', 'points': [(0.5,0), (0.5,1)]}, 
+          {'type': 'line', 'points': [(0,1), (1,1)]}],
+    'V': [{'type': 'line', 'points': [(0,1), (0.5,0), (1,1)]}],
+    'W': [{'type': 'line', 'points': [(0,1), (0.2,0), (0.5,0.5), (0.8,0), (1,1)]}],
+    'X': [{'type': 'line', 'points': [(0,0), (1,1)]}, 
+          {'type': 'line', 'points': [(0,1), (1,0)]}],
+    'Y': [{'type': 'line', 'points': [(0,1), (0.5,0.5)]}, 
+          {'type': 'line', 'points': [(1,1), (0.5,0.5), (0.5,0)]}],
+    'Z': [{'type': 'line', 'points': [(0,1), (1,1), (0,0), (1,0)]}],
+
+    # Curved & Refined Letters
+    'B': [{'type': 'line', 'points': [(0,1), (0,0)]}, 
+          {'type': 'line', 'points': [(0,1), (0.5,1)]}, 
+          {'type': 'ellipse', 'center': (0.5, 0.75), 'radii': (0.4, 0.25), 'arc': (90, -90)},
+          {'type': 'line', 'points': [(0.5,0.5), (0,0.5)]},
+          {'type': 'line', 'points': [(0,0.5), (0.5,0.5)]}, 
+          {'type': 'ellipse', 'center': (0.5, 0.25), 'radii': (0.4, 0.25), 'arc': (90, -90)},
+          {'type': 'line', 'points': [(0.5,0), (0,0)]}],
+          
+    'C': [{'type': 'ellipse', 'center': (0.5, 0.5), 'radii': (0.5, 0.5), 'arc': (45, 315)}], 
+    
+    'D': [{'type': 'ellipse', 'center': (0.4, 0.5), 'radii': (0.6, 0.5), 'arc': (-90, 90)}, 
+          {'type': 'line', 'points': [(0.4, 1), (0, 1), (0, 0), (0.4, 0)]}],
+          
+    'G': [{'type': 'ellipse', 'center': (0.5, 0.5), 'radii': (0.5, 0.5), 'arc': (45, 315)}, 
+          {'type': 'line', 'points': [(0.85, 0.15), (0.85, 0.4), (0.5, 0.4)]}],
+
+    'J': [{'type': 'line', 'points': [(0.8, 1), (0.8, 0.3)]},
+          {'type': 'ellipse', 'center': (0.4, 0.3), 'radii': (0.4, 0.3), 'arc': (0, -180)}],
+
+    'O': [{'type': 'ellipse', 'center': (0.5, 0.5), 'radii': (0.5, 0.5), 'arc': (0, 360)}],
+    
+    'P': [{'type': 'line', 'points': [(0,0), (0,1)]}, 
+          {'type': 'line', 'points': [(0,1), (0.5,1)]},
+          {'type': 'ellipse', 'center': (0.5, 0.75), 'radii': (0.4, 0.25), 'arc': (90, -90)},
+          {'type': 'line', 'points': [(0.5,0.5), (0,0.5)]}],
+    
+    'Q': [{'type': 'ellipse', 'center': (0.5, 0.5), 'radii': (0.5, 0.5), 'arc': (0, 360)},
+          {'type': 'line', 'points': [(0.6, 0.2), (1, 0)]}],
+
+    'R': [{'type': 'line', 'points': [(0,0), (0,1)]}, 
+          {'type': 'line', 'points': [(0,1), (0.5,1)]},
+          {'type': 'ellipse', 'center': (0.5, 0.75), 'radii': (0.4, 0.25), 'arc': (90, -90)},
+          {'type': 'line', 'points': [(0.5,0.5), (0,0.5)]},
+          {'type': 'line', 'points': [(0.4, 0.5), (1, 0)]}], 
+
+    'S': [{'type': 'ellipse', 'center': (0.5, 0.75), 'radii': (0.5, 0.25), 'arc': (25, 270)}, # Extended Top
+          {'type': 'ellipse', 'center': (0.5, 0.25), 'radii': (0.5, 0.25), 'arc': (90, -155)}], # Extended Bottom
+
+    'U': [{'type': 'line', 'points': [(0, 1), (0, 0.3)]},
+          {'type': 'ellipse', 'center': (0.5, 0.3), 'radii': (0.5, 0.3), 'arc': (180, 360)}, 
+          {'type': 'line', 'points': [(1, 0.3), (1, 1)]}],
+
+    # Numbers
+    '0': [{'type': 'ellipse', 'center': (0.5, 0.5), 'radii': (0.45, 0.5), 'arc': (0, 360)}],
+    '1': [{'type': 'line', 'points': [(0.3, 0.7), (0.5, 1), (0.5, 0)]}, 
+          {'type': 'line', 'points': [(0.2, 0), (0.8, 0)]}],
+    '2': [{'type': 'ellipse', 'center': (0.5, 0.7), 'radii': (0.5, 0.3), 'arc': (160, -50)}, # End at -50 deg -> x=0.82, y=0.47
+          {'type': 'line', 'points': [(0.82, 0.47), (0, 0), (1, 0)]}], # Connected exactly
+    '3': [{'type': 'ellipse', 'center': (0.5, 0.75), 'radii': (0.4, 0.25), 'arc': (210, -90)}, # Ends at (0.5, 0.5)
+          {'type': 'ellipse', 'center': (0.5, 0.25), 'radii': (0.45, 0.25), 'arc': (90, -210)}], # Starts at (0.5, 0.5)
+          
+    '4': [{'type': 'line', 'points': [(0.7,0), (0.7,1)]}, 
+          {'type': 'line', 'points': [(0,1), (0,0.4), (1,0.4)]}], 
+    '5': [{'type': 'line', 'points': [(0.9,1), (0.1,1), (0.1,0.55)]}, 
+          {'type': 'ellipse', 'center': (0.5, 0.35), 'radii': (0.48, 0.35), 'arc': (146, -135)}], # Extended more
+    '6': [{'type': 'line', 'points': [(0.8, 1.0), (0.1, 0.45)]}, # Extended top stalk
+          {'type': 'ellipse', 'center': (0.5, 0.3), 'radii': (0.5, 0.3), 'arc': (0, 360)}], 
+    '7': [{'type': 'line', 'points': [(0,1), (1,1), (0.4,0)]}], 
+    '8': [{'type': 'ellipse', 'center': (0.5, 0.75), 'radii': (0.4, 0.25), 'arc': (0, 360)}, 
+          {'type': 'ellipse', 'center': (0.5, 0.25), 'radii': (0.5, 0.25), 'arc': (0, 360)}],
+    '9': [{'type': 'ellipse', 'center': (0.5, 0.7), 'radii': (0.45, 0.3), 'arc': (0, 360)},
+          {'type': 'line', 'points': [(0.95, 0.7), (0.95, 0.5)]},
+          {'type': 'ellipse', 'center': (0.5, 0.5), 'radii': (0.45, 0.5), 'arc': (0, -110)}], # Extended tail
+          
+    ' ': [],
+    '-': [{'type': 'line', 'points': [(0, 0.5), (1, 0.5)]}],
+    '.': [{'type': 'line', 'points': [(0.4,0), (0.6,0), (0.6,0.2), (0.4,0.2), (0.4,0)]}], 
 }
 
 def get_char_strokes(char):
     return FONT_DEFS.get(char.upper(), [])
 
+def sample_ellipse(center, radii, arc, steps=None):
+    """
+    Samples an elliptical arc.
+    center: (cx, cy)
+    radii: (rx, ry)
+    arc: (start_deg, end_deg)
+    """
+    cx, cy = center
+    rx, ry = radii
+    start_rad = math.radians(arc[0])
+    end_rad = math.radians(arc[1])
+    
+    # Adaptive resolution if steps not provided
+    # Aim for ~5-10 degrees per step for smoothness
+    if steps is None:
+        span_deg = abs(arc[1] - arc[0])
+        steps = max(8, int(span_deg / 5)) # Every 5 degrees -> 72 points for a circle
+    
+    points = []
+    
+    # Determine direction
+    # We want to go from start to end.
+    span = end_rad - start_rad
+    step_rad = span / steps
+    
+    for i in range(steps + 1):
+        theta = start_rad + i * step_rad
+        x = cx + rx * math.cos(theta)
+        y = cy + ry * math.sin(theta)
+        points.append((x, y))
+        
+    return points
+
 def text_to_traj(text: str, start_pos: tuple, font_size: float, char_spacing: float):
     """
     Generates a list of line segments for the given text.
-    Returns: list of dicts {'type':'line', 'points':[[x1,y1], [x2,y2]], 'data':{'penup':...}}
+    Handles 'line' and 'ellipse' primitives by sampling them into dense lines.
     """
     traj_patches = []
-    
     cursor_x, cursor_y = start_pos
     
     for char in text:
         if char == '\n':
             cursor_x = start_pos[0]
-            cursor_y -= font_size * 1.5 # Line spacing
+            cursor_y -= font_size * 1.5 
             continue
 
         if char == ' ':
             cursor_x += (font_size * 0.8) + char_spacing
             continue
 
-        strokes = get_char_strokes(char)
-        
-        # Adjust for character width + spacing
-        # Assuming monospaced 1.0 width for now
+        primitives = get_char_strokes(char)
         char_width = font_size
         
-        for stroke in strokes:
-            if not stroke: continue
+        for prim in primitives:
+            # 1. Get Normalized Points
+            norm_points = []
             
-            # Map normalized stroke points to world space
+            if prim['type'] == 'line':
+                norm_points = prim['points']
+            elif prim['type'] == 'ellipse':
+                norm_points = sample_ellipse(prim['center'], prim['radii'], prim['arc'])
+                
+            if not norm_points: continue
+            
+            # 2. Scale & Translate to World
             world_points = []
-            for p in stroke:
-                wx = cursor_x + p[0] * char_width * 0.8 # Scale width slightly down for aspect
-                wy = cursor_y + p[1] * font_size # Add to scale Y up (Standard Frame)
+            for p in norm_points:
+                wx = cursor_x + p[0] * char_width * 0.8 
+                wy = cursor_y + p[1] * font_size
                 world_points.append((wx, wy))
             
-            # Create patches from stroke (continuous line)
-            # First move to start of stroke (PEN UP if needed)
-            # Actually the system handles pen up automatically if disjoint.
-            # But we must ensure the list of patches reflects disjoint segments.
-            
-            # We will create line segments for the stroke
+            # 3. Create Segments
             for i in range(len(world_points) - 1):
                 p0 = world_points[i]
                 p1 = world_points[i+1]
-                
-                # Check if this is the start of a new stroke (implicit pen up before this)
-                is_start_of_stroke = (i == 0)
-                # But our trajectory logic in gui_interface stitches them.
-                # If we return a list of patches, the 'gap' between patches is handled by slice_trj logic?
-                # In gui_interface.py: py_get_data iterates patches.
-                # It stitches data[i] to data[i+1]. If data[i] end != data[i+1] start, what happens?
-                # Looking at py_get_data: 
-                # q0s += q0s_p ...
-                # It seems it assumes continuity or inserts something?
-                # NO. `slice_trj` checks `patch['data']['penup']`. 
-                # If valid trajectory needs jumps, we must insert PENUP patches or rely on the logic 
-                # identifying gaps.
-                
-                # Actually, standard way in this app seems to be: 
-                # a 'line' patch is drawn. 
-                # If we need to jump, we insert a 'penup' patch? 
-                # OR we verify how `py_get_data` handles it.
-                # "stitch patches" just concatenates. It does NOT automatically insert jumps for gaps.
-                # So we must explicitly generate a jump (penup) if previous end != current start.
-                
-                # However, for simplicity here, we will return just the drawing patches. 
-                # The user might rely on the loop in py_get_data to add the initial path from current position.
-                # BUT between letters, we need jumps.
-                
-                # Solution: The output of this function should be fully explicit?
-                # Or we let the caller handle it.
-                # Let's make it explicit: 
-                # Each segment in a stroke is a LINE.
-                # The gap between strokes is a transition.
-                # The GUI `py_get_data` normally takes a list of drawing primitives from JS.
-                # JS usually sends lines/circles. 
-                # If we generate this on Python side, we should match that structure.
                 
                 patch = {
                     'type': 'line',
@@ -137,56 +208,20 @@ def text_to_traj(text: str, start_pos: tuple, font_size: float, char_spacing: fl
                     'data': {'penup': False}
                 }
                 
-                # If this is the very first point of a stroke, and it's not the very first point of the text,
-                # we might need to assume the previous patch ended elsewhere.
-                # We will mark the start of each stroke as requiring a 'jump' from previous?
-                # Actually, `slice_trj` in `gui_interface` does NOT seem to auto-magically handle jumps between list items.
-                # Wait, line 96 in gui_interface:
-                # `data = [{'type':'line', 'points':[current_q, data[0]['points'][0]], 'data':{'penup':True}}] + data[::]`
-                # This handles the jump from ROBOT POS to START OF TRAJ.
-                # But within "data", if patch[0] end != patch[1] start, there is a physical discontinuity.
-                # If we just concatenate q lists, the robot will TELEPORT in `qt` lists?
-                # No, `state.last_known_q` is updated. 
-                # But `slice_trj` produces lists of q values. 
-                # If `q0s` ends at A and next `q0s_p` starts at B, the concatenation `q0s += q0s_p` 
-                # will result in the list jumping from A to B in one timestep. 
-                # THIS IS BAD. infinite velocity.
-                
-                # So we MUST insert penup moves between disjoint segments.
-                pass
+                # Check discontinuity with previous patch to insert PENUP
+                if traj_patches:
+                    prev_end = traj_patches[-1]['points'][1]
+                    dist = ((prev_end[0]-p0[0])**2 + (prev_end[1]-p0[1])**2)**0.5
+                    
+                    if dist > 0.001:
+                        traj_patches.append({
+                            'type': 'line',
+                            'points': [prev_end, p0],
+                            'data': {'penup': True}
+                        })
                 
                 traj_patches.append(patch)
 
         cursor_x += (font_size * 0.8) + char_spacing
 
-    # Now we need to post-process to insert PENUP moves between disjoint patches
-    final_patches = []
-    if not traj_patches: return []
-    
-    # We can't know the robot start position here, so the first patch is just the first patch.
-    # (The main loop handles the move-to-start).
-    
-    final_patches.append(traj_patches[0])
-    
-    for i in range(1, len(traj_patches)):
-        prev = final_patches[-1]
-        curr = traj_patches[i]
-        
-        # Check continuity
-        prev_end = prev['points'][1]
-        curr_start = curr['points'][0]
-        
-        dist = ((prev_end[0]-curr_start[0])**2 + (prev_end[1]-curr_start[1])**2)**0.5
-        
-        if dist > 0.001: # Discontinuity
-            # Insert PenUp
-            penup_patch = {
-                'type': 'line',
-                'points': [prev_end, curr_start],
-                'data': {'penup': True}
-            }
-            final_patches.append(penup_patch)
-            
-        final_patches.append(curr)
-        
-    return final_patches
+    return traj_patches

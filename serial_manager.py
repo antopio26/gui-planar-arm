@@ -61,16 +61,16 @@ class SerialManager:
                             # If not a start byte, consume it to realign
                             pass
                     
-                    # Update GUI with current position
-                    if time() - last_gui_update > GUI_UPDATE_INTERVAL:
-                        try:
-                            eel.js_draw_pose([state.firmware.q0, state.firmware.q1])
-                        except:
-                            pass
-                        last_gui_update = time()
-
                 except Exception as e:
                     print(f"Serial Monitor Error: {e}")
+
+            # Update GUI with current position (Always, even if offline)
+            if time() - last_gui_update > GUI_UPDATE_INTERVAL:
+                try:
+                    eel.js_draw_pose([state.firmware.q0, state.firmware.q1])
+                except:
+                    pass
+                last_gui_update = time()
             
             sleep(0.005) # Fast polling
 
@@ -90,62 +90,102 @@ class SerialManager:
                 num_points = len(data['q'][0])
                 print(f"Total Trajectory Points: {num_points}")
                 
-                # Configuration for Flow Control
-                FIRMWARE_BUFFER_SIZE = 50 # Assumed Firmware Buffer Size
-                BATCH_SIZE = 5            # Send 5 points at a time
-                
-                # --- EXECUTION ENGINE ---
-                
-                # 1. Fill the buffer initially (Pre-roll)
-                state.reset_recording()
-                start_time = time()
-                
-                sent_count = 0
-                initial_fill = min(num_points, FIRMWARE_BUFFER_SIZE - 5)
-                
-                print(f"Pre-rolling {initial_fill} points...")
-                for i in range(initial_fill):
-                    packet = bp.encode_trajectory_point(
-                        data['q'][0][i], data['q'][1][i],
-                        data['dq'][0][i], data['dq'][1][i],
-                        data['ddq'][0][i], data['ddq'][1][i],
-                        int(data['q'][2][i])
-                    )
-                    scm.write_data(packet)
-                    sent_count += 1
+                if SETTINGS['ser_started']:
+                    # Configuration for Flow Control
+                    FIRMWARE_BUFFER_SIZE = 50 # Assumed Firmware Buffer Size
+                    BATCH_SIZE = 5            # Send 5 points at a time
                     
-                # 2. Main Execution Loop
-                while sent_count < num_points:
-                    sleep(0.04) # Sleep 40ms -> Firmware consumes ~4 points
+                    # --- EXECUTION ENGINE ---
                     
-                    # Send a batch of 5 points to top up
-                    limit = min(sent_count + BATCH_SIZE, num_points)
-                    for i in range(sent_count, limit):
-                         packet = bp.encode_trajectory_point(
+                    # 1. Fill the buffer initially (Pre-roll)
+                    state.reset_recording()
+                    start_time = time()
+                    
+                    sent_count = 0
+                    initial_fill = min(num_points, FIRMWARE_BUFFER_SIZE - 5)
+                    
+                    print(f"Pre-rolling {initial_fill} points...")
+                    for i in range(initial_fill):
+                        packet = bp.encode_trajectory_point(
                             data['q'][0][i], data['q'][1][i],
                             data['dq'][0][i], data['dq'][1][i],
                             data['ddq'][0][i], data['ddq'][1][i],
                             int(data['q'][2][i])
                         )
-                         scm.write_data(packet)
-                    
-                    sent_count = limit
-                    
-                    if sent_count % 100 == 0:
-                        print(f"Progress: {sent_count}/{num_points}")
+                        scm.write_data(packet)
+                        sent_count += 1
+                        
+                    # 2. Main Execution Loop
+                    while sent_count < num_points:
+                        if state.stop_requested:
+                            print("!!! TRAJECTORY ABORTED BY USER (ONLINE) !!!")
+                            break
 
-                print(f"TRJ SENT COMPLETE: {num_points} points")
-                
-                # Wait for the trajectory to finish physically
-                total_duration = num_points * SETTINGS['Tc']
-                elapsed = time() - start_time
-                remaining = total_duration - elapsed
-                
-                if remaining > 0:
-                    print(f"Waiting for trajectory to finish: {remaining:.2f}s")
-                    sleep(remaining + 0.5) # Add 0.5s margin
-                
-                state.stop_recording()
+                        sleep(0.04) # Sleep 40ms -> Firmware consumes ~4 points
+                        
+                        # Send a batch of 5 points to top up
+                        limit = min(sent_count + BATCH_SIZE, num_points)
+                        for i in range(sent_count, limit):
+                                packet = bp.encode_trajectory_point(
+                                data['q'][0][i], data['q'][1][i],
+                                data['dq'][0][i], data['dq'][1][i],
+                                data['ddq'][0][i], data['ddq'][1][i],
+                                int(data['q'][2][i])
+                            )
+                                scm.write_data(packet)
+                        
+                        sent_count = limit
+                        
+                        if sent_count % 100 == 0:
+                            print(f"Progress: {sent_count}/{num_points}")
+
+                    if state.stop_requested:
+                         print("Execution stopped.")
+                    else:
+                        print(f"TRJ SENT COMPLETE: {num_points} points")
+                        # Wait for the trajectory to finish physically
+                        total_duration = num_points * SETTINGS['Tc']
+                        elapsed = time() - start_time
+                        remaining = total_duration - elapsed
+                        
+                        if remaining > 0:
+                            print(f"Waiting for trajectory to finish: {remaining:.2f}s")
+                            sleep(remaining + 0.5) # Add 0.5s margin
+                    state.stop_recording()
+
+                else:
+                    # --- SIMULATION ENGINE ---
+                    print("SIMULATION MODE: Playing trajectory locally...")
+                    state.reset_recording()
+                    start_time = time()
+
+                    for i in range(num_points):
+                        if state.stop_requested:
+                            print("!!! TRAJECTORY ABORTED BY USER (SIMULATION) !!!")
+                            break
+
+                        # Simula il passare del tempo esatto del controller
+                        loop_start = time()
+
+                        # Update State
+                        state.firmware.q0 = data['q'][0][i]
+                        state.firmware.q1 = data['q'][1][i]
+                        state.firmware.last_update = loop_start
+                        
+                        if state.recording_active:
+                            state.rec_data['q0'].append(state.firmware.q0)
+                            state.rec_data['q1'].append(state.firmware.q1)
+                            state.rec_data['t'].append(loop_start)
+                        
+                        # Wait typical sample time
+                        # Assuming Tc is reliable. If too fast on Windows, this might drift, 
+                        # but acceptable for simulation.
+                        sleep(SETTINGS['Tc']) 
+                        
+                        if i % 100 == 0:
+                            print(f"Sim Progress: {i}/{num_points}")
+                    
+                    state.stop_recording()
                 # Pass desired trajectory data to plotter
                 plotting.plot_recorded_data(data['q'][0], data['q'][1], SETTINGS['Tc'], state.rec_data)
 

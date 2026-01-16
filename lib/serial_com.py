@@ -46,6 +46,12 @@ def ser_init(serial_path:str) -> bool:
             found = False
             
     if found:
+        # Auto-Reset the board via DTR
+        ser.dtr = False
+        time.sleep(0.1)
+        ser.dtr = True
+        time.sleep(2.0) # Wait for board reboot
+
         ser.reset_input_buffer()
         ser.reset_output_buffer()
         

@@ -122,9 +122,10 @@ def py_get_data():
         dq = (tpy.find_velocities(q[0], ts), tpy.find_velocities(q[1], ts))
         ddq = (tpy.find_accelerations(dq[0], ts), tpy.find_accelerations(dq[1], ts))
         
-        validate_trajectory(q, dq, ddq)
-        
-        print(f"DEBUG PENUPS: {set(penups)}")
+        if not validate_trajectory(q, dq, ddq):
+            raise Exception("Trajectory Validation Failed: Safety limit exceeded. Execution aborted.")
+            
+        state.stop_requested = False # Reset flag before start
         serial_manager.send_data('trj', q=q, dq=dq, ddq=ddq)
         
         if len(q0s) > 0:
@@ -145,6 +146,19 @@ def py_get_data():
         print(traceback.format_exc())
 
 @eel.expose
+def py_stop_trajectory():
+    print("Received STOP request from UI")
+    state.stop_requested = True
+    
+    if SETTINGS['ser_started']:
+        try:
+            packet = bp.encode_stop_command()
+            scm.write_data(packet)
+            print("Physical STOP command sent to Firmware.")
+        except Exception as e:
+            print(f"Failed to send STOP command: {e}")
+
+@eel.expose
 def py_log_data():
     # Deprecated or needs update if used? 
     # original logic wrote to 'log_data.csv' from global dict
@@ -160,10 +174,70 @@ def py_log_data():
 
 @eel.expose
 def py_homing_cmd():
-    packet = bp.encode_homing_command()
-    print(f"Homing packet sent: {packet}")
-    scm.write_data(packet)
-    state.last_known_q = [0.0, 0.0]
+    if SETTINGS['ser_started']:
+        # Real Robot Homing
+        packet = bp.encode_homing_command()
+        print(f"Homing packet sent: {packet}")
+        scm.write_data(packet)
+        # We assume the robot resets. 
+        # Ideally we should wait for feedback, but for now we reset state locally too.
+        state.last_known_q = [0.0, 0.0]
+        state.firmware.q0 = 0.0
+        state.firmware.q1 = 0.0
+    else:
+        # Simulated Homing
+        print("Homing: SIMULATION MODE")
+        
+        # Get start position
+        q_start = state.last_known_q
+        q_end = [0.0, 0.0]
+        
+        # If already at 0, do nothing
+        if abs(q_start[0]) < 0.001 and abs(q_start[1]) < 0.001:
+            print("Already at home.")
+            return
+
+        # Generate smooth trajectory (Cycloidal)
+        # Using max_acc/5 for gentle homing
+        acc = SETTINGS['max_acc'] * 0.2 
+        
+        # Trajpy cycloidal returns tuple (functions, duration)
+        # We need to compose for both joints.
+        # cycloidal([start, end], acc)
+        
+        (f0, tf0) = tpy.cycloidal([q_start[0], q_end[0]], acc)
+        (f1, tf1) = tpy.cycloidal([q_start[1], q_end[1]], acc)
+        
+        tf = max(tf0, tf1)
+        
+        # Sample points
+        ts = tpy.rangef(0, SETTINGS['Tc'], tf, True)
+        
+        q0s = [f0[0](t) for t in ts]
+        q1s = [f1[0](t) for t in ts]
+        
+        # Velocity/Acc (Optional for sim but good for plot)
+        dq0s = [f0[1](t) for t in ts]
+        dq1s = [f1[1](t) for t in ts]
+        
+        ddq0s = [f0[2](t) for t in ts]
+        ddq1s = [f1[2](t) for t in ts] # Corrected from f0 to f1
+        
+        # Package for serial_manager (Sim Engine)
+        # It expects tuple lists: q=(q0s, q1s, penups)
+        # penups = 1 (Up) usually for homing to be safe? Or 0?
+        # Let's say 1 (Up).
+        penups = [1] * len(q0s)
+        
+        q = (q0s, q1s, penups)
+        dq = (dq0s, dq1s)
+        ddq = (ddq0s, ddq1s) # We don't really use this in sim, but consisteny
+        
+        # Send to manager
+        serial_manager.send_data('trj', q=q, dq=dq, ddq=ddq)
+        
+        # Update last known
+        state.last_known_q = [0.0, 0.0]
 
 @eel.expose
 def py_serial_online():
@@ -174,6 +248,24 @@ def py_serial_startup():
     print(f"Calling scm.ser_init({SERIAL_PORT})...")
     SETTINGS['ser_started'] = scm.ser_init(SERIAL_PORT)
     print(f"Serial Started? {SETTINGS['ser_started']}")
+
+@eel.expose
+def py_clear_state():
+    print("Clearing Backend State...")
+    # Reset State
+    state.recording_active = False
+    state.reset_recording()
+    
+    # If serial is connected, maybe stop any current motion?
+    # Sending empty trajectory or stop?
+    # For now, just reset internal trackers.
+    state.last_known_q = [state.firmware.q0, state.firmware.q1]
+    
+    if SETTINGS['ser_started']:
+        # Optional: Send a specific invalidation command if protocol supports it
+        pass
+        
+    return True
 
 
 def _apply_linear_transform(patches, x_offset, y_offset, angle_deg):

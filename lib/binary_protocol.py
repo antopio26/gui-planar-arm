@@ -30,6 +30,15 @@ def encode_trajectory_point(q0: float, q1: float, dq0: float, dq1: float, ddq0: 
     packet = header + checksum_data + struct.pack('<I', crc)
     return packet
 
+def encode_stop_command() -> bytes:
+    cmd = CMD_STOP
+    payload = struct.pack('<ffffffB', 0, 0, 0, 0, 0, 0, 0) # Zero payload
+    checksum_data = struct.pack('B', cmd) + payload
+    crc = calculate_crc32(checksum_data)
+    header = struct.pack('BB', START_BYTE_1, START_BYTE_2)
+    packet = header + checksum_data + struct.pack('<I', crc)
+    return packet
+
 def encode_homing_command() -> bytes:
     cmd = CMD_HOMING
     payload = struct.pack('<ffffffB', 0, 0, 0, 0, 0, 0, 0) # Zero payload

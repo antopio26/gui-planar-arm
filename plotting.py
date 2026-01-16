@@ -2,6 +2,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from lib import trajpy as tpy
 from config import SETTINGS
+import os
+
+# Ensure images directory exists
+os.makedirs('images', exist_ok=True)
 
 def debug_plot(q, name="image"):
     plt.figure()
