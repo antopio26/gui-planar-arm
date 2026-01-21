@@ -182,22 +182,8 @@ Durante l'ultima sessione (16 Gennaio 2026, Sera), abbiamo introdotto funzionali
 - **Tolleranza Accelerazione**: Ricalibrati i parametri di sicurezza (`MAX_ACC_TOLERANCE_FACTOR` aumentato a 15.0) per permettere l'esecuzione di font vettoriali complessi che, essendo costituiti da molti piccoli segmenti, generavano falsi positivi nei check di accelerazione.
 
 ### N. SISTEMA DI SALVATAGGIO "STAMPI" (TEMPLATES)
-È stata introdotta una funzionalità per salvare e riutilizzare traiettorie complesse (testi o disegni), permettendo di creare una libreria di "stampi" pronti all'uso.
-
-#### 1. Architettura Save/Load
-- **Directory**: I file sono salvati in formato `.json` nella cartella `saved_trajectories/` locale.
-- **Interfaccia**: Nuova sezione "Saved Templates" nella sidebar con:
-    - Input per nome file.
-    - Pulsanti **Save** e **Load**.
-    - Menu a tendina dinamico che elenca i file disponibili.
-
-#### 2. Gestione Primitive Geometriche (Fix Cerchi)
-- **Problema**: Il sistema di anteprima e esecuzione del robot lavora nativamente con liste di segmenti (punti), mentre i cerchi erano memorizzati come oggetti matematici puri (Centro, Raggio), causando la perdita del dato durante il ricaricamento.
-- **Soluzione Implementata**: Quando si salva un Template, il sistema intercetta le primitive di tipo `circle` e le **campiona automaticamente** in una serie di piccoli segmenti lineari (risoluzione ~5°).
-- **Risultato**: 
-    - Il file salvato contiene una rappresentazione vettoriale fedele ad alta densità.
-    - Il caricamento è compatibile al 100% con il motore di movimento del robot.
-    - L'anteprima visualizzata dopo il caricamento è identica all'originale.
+[Funzionalità Rimossa su richiesta Utente - 21 Gennaio 2026]
+- La sezione è stata disabilitata per snellire l'interfaccia.
 
 ---
 
@@ -354,7 +340,7 @@ class StateManager {
 
 #### Server Web
 - `host`: 'localhost'
-- `port`: 6969
+- `port`: 0 (Auto-assign random free port)
 
 #### Seriale
 - `SERIAL_PORT`: None (Auto-detect) o stringa porta specifica (es. "COM9")
@@ -466,5 +452,21 @@ class StateManager {
 - `layout/js/state.js`: Aggiornamento enum `TOOLS` e proprietà stato (`shapeStart`).
 - `layout/js/canvas.js`: Riscrittura completa `handleClick` e `drawToolPreview` per supportare le nuove modalità di interazione.
 
+### Versione 2.3 (21 Gennaio 2026 - Feature Update)
+**Modalità Disegno (Drawing Modes)**:
+1. ✅ **Selettore Modalità**: Aggiunti pulsanti **United** (Catena) e **Separated** (Discreto).
+2. **Logica United (Continuous)**:
+   - Linee e Semicerchi si incollano automaticamente all'ultimo punto.
+3. **Logica Separated (Discrete)**:
+   - Ogni forma richiede un nuovo punto di inizio (Start Click).
+   - Il sistema inserisce automaticamente movimenti di "Salto" (Pen Up) per garantire che il robot raggiunga il nuovo punto senza trascinare la penna.
+   - Risolve il problema di continuità del backend garantendo una traiettoria valida anche per figure disgiunte.
+
+**File Modificati**:
+- `layout/index.html`: Aggiunti pulsanti Mode.
+- `layout/js/state.js`: Aggiunto `drawingMode`.
+- `layout/js/main.js`: Gestione cambio modalità.
+- `layout/js/canvas.js`: Logica `handleClick` e `preview` sensibile alla modalità (Jumps automatici).
+
 **Stato Progetto**: ✅ Pronto per uso in ambiente controllato
-**Prossimi Step Consigliati**: Test automatici, logging strutturato, async/await per seriale
+**Prossimi Step Consigliati**: Test automatici, logging strutturato.

@@ -37,6 +37,10 @@ export class CanvasHandler {
 
         const dpr = window.devicePixelRatio || 1;
 
+        // Check if size actually changed to avoid unnecessary updates
+        const oldSize = parseFloat(this.canvas.style.width) || size;
+        const scaleRatio = size / oldSize;
+
         this.canvas.width = size * dpr;
         this.canvas.height = size * dpr;
 
@@ -59,6 +63,49 @@ export class CanvasHandler {
 
         // Store visual radius for drawing
         this.workspaceRadius = radius;
+
+        // --- Recalculate Relative Coordinates for consistency ---
+        this.updateCoordinates(scaleRatio);
+    }
+
+    updateCoordinates(scaleRatio) {
+        // Update simple points
+        if (this.state.points) {
+            this.state.points.forEach(p => p.updateRelative());
+        }
+        if (this.state.sentPoints) {
+            this.state.sentPoints.forEach(p => p.updateRelative());
+        }
+
+        // Helper to update trajectory data
+        const updateTraj = (traj) => {
+            if (!traj || !traj.data) return;
+            traj.data.forEach(item => {
+                if (item.type === 'line') {
+                    // [p0, p1, raised]
+                    item.data[0].updateRelative();
+                    item.data[1].updateRelative();
+                } else if (item.type === 'circle') {
+                    // [c, r, theta0, theta1, raised, a, p]
+                    item.data[0].updateRelative(); // Center
+                    item.data[1] *= scaleRatio;     // Radius (scalar pixel value)
+                    if (item.data[5]) item.data[5].updateRelative(); // a
+                    if (item.data[6]) item.data[6].updateRelative(); // p
+                }
+            });
+        };
+
+        if (this.state.trajectory) updateTraj(this.state.trajectory);
+        if (this.state.sentTrajectory) updateTraj(this.state.sentTrajectory);
+
+        // Also update shape start if drawing
+        if (this.state.shapeStart) this.state.shapeStart.updateRelative();
+
+        // Force redraw
+        if (this.state.appMode === 'text') {
+            // For text, just regenerate preview if needed (it uses raw coords mostly)
+            // But if we have cached patches with Points...
+        }
     }
 
     handleMouseMove(e) {
@@ -71,21 +118,36 @@ export class CanvasHandler {
         let x = this.mouseX;
         let y = this.mouseY;
         const settings = this.state.settings;
+        // Anchor Snapping (Priority in United Mode)
+        let snapped = false;
+        if (this.state.drawingMode === 'continuous' && this.state.points.length > 0) {
+            for (let p of this.state.points) {
+                const dx = x - p.relX;
+                const dy = y - p.relY;
+                if (dx * dx + dy * dy < 144) { // 12px snap radius
+                    x = p.relX;
+                    y = p.relY;
+                    snapped = true;
+                    break;
+                }
+            }
+        }
 
-        // Apply grid snapping if enabled
-        if (this.state.snapToGrid) {
+        // Apply grid snapping (if not snapped to anchor)
+        if (!snapped && this.state.snapToGrid) {
             const snappedPoint = snapPointToGrid(new Point(x, y, settings), this.state.gridSize, settings);
             x = snappedPoint.relX;
             y = snappedPoint.relY;
         }
 
-        // Radius check (workspace limit)
         const distSq = Math.pow(x - settings.origin.x, 2) + Math.pow(y - settings.origin.y, 2);
         const maxRadius = this.workspaceRadius || (this.canvas.height / 2);
 
         if (distSq > maxRadius * maxRadius) return;
 
-        // Clear sent data if new drawing starts
+        // Strict Mode Check
+        if (this.state.appMode !== 'drawing') return;
+
         if (this.state.points.length === 0 && this.state.sentPoints.length > 0) {
             this.state.sentPoints = [];
             this.state.sentTrajectory.reset();
@@ -93,97 +155,107 @@ export class CanvasHandler {
 
         const currentTool = this.state.tool;
         const currentPoint = new Point(x, y, settings);
+        const mode = this.state.drawingMode; // 'continuous' or 'discrete'
 
         if (currentTool === TOOLS.LINE) {
-            this.state.points.push(currentPoint);
-
-            if (this.state.points.length > 1) {
-                const p0 = this.state.points[this.state.points.length - 2];
-                const p1 = this.state.points[this.state.points.length - 1];
-                this.state.trajectory.add_line(p0, p1, this.state.penUp);
-                this.state.saveState();
+            if (mode === 'discrete') {
+                // Discrete Line: Start -> End (Independent Segments)
+                if (!this.state.shapeStart) {
+                    // Click 1: Start Point
+                    // Jump from previous if exists
+                    if (this.state.points.length > 0) {
+                        const last = this.state.points[this.state.points.length - 1];
+                        this.state.trajectory.add_line(last, currentPoint, true);
+                    }
+                    this.state.shapeStart = currentPoint;
+                    this.state.points.push(currentPoint);
+                } else {
+                    // Click 2: End Point
+                    const start = this.state.shapeStart;
+                    this.state.trajectory.add_line(start, currentPoint, this.state.penUp);
+                    this.state.points.push(currentPoint);
+                    this.state.shapeStart = null;
+                    this.state.saveState();
+                }
+            } else {
+                // Continuous Line: Polyline
+                this.state.points.push(currentPoint);
+                if (this.state.points.length > 1) {
+                    const p0 = this.state.points[this.state.points.length - 2];
+                    this.state.trajectory.add_line(p0, currentPoint, this.state.penUp);
+                    this.state.saveState();
+                }
             }
 
         } else if (currentTool === TOOLS.SEMICIRCLE) {
-            // Logic: Start Point (Click 1) -> End Point (Click 2)
+
+            // Auto-Start logic only in Continuous mode
+            let autoStart = (mode === 'continuous' && this.state.points.length > 0);
+
             if (!this.state.semicircleStart) {
-                // If we have previous points, chain from last point
-                if (this.state.points.length > 0) {
+                if (autoStart) {
+                    // Auto-chain: Last point is Start. Current click is END.
                     this.state.semicircleStart = this.state.points[this.state.points.length - 1];
-                    // Proceed to second click immediately? No, wait for user to click End.
-                    // But if user JUST clicked, that was 'Line End'.
-                    // Now user selects Semicircle.
-                    // User clicks 'End' of semicircle.
-                    // So we treat the current click as END if we auto-chained.
-
-                    // Wait: If I select tool, I haven't clicked yet.
-                    // If I click now, is it Start or End?
-                    // User expectation: "Scegliere il punto di partenza".
-                    // If I want to chain, I click on the last point to confirm it?
-                    // Or does it auto-start? 
-                    // Let's require Explicit Start Click to be safe/flexible (allows detached semicircles).
-                    // BUT "Incollare tra di loro".
-                    // Compromise: If I click near the last point, it snaps?
-
-                    this.state.semicircleStart = currentPoint;
-                    this.state.points.push(currentPoint);
+                    // Proceed to process 'End' (Current Point) below
                 } else {
+                    // Manual Start (Discrete or First Point)
+                    if (this.state.points.length > 0) {
+                        const last = this.state.points[this.state.points.length - 1];
+                        this.state.trajectory.add_line(last, currentPoint, true);
+                    }
                     this.state.semicircleStart = currentPoint;
                     this.state.points.push(currentPoint);
+                    return; // Wait for second click
                 }
-            } else {
-                // Second Click: End Point
-                const start = this.state.semicircleStart;
-                const end = currentPoint;
-
-                // Calc properties for arc
-                const cx = (start.relX + end.relX) / 2;
-                const cy = (start.relY + end.relY) / 2;
-                const center = new Point(cx, cy, settings);
-
-                const dx = end.relX - start.relX;
-                const dy = end.relY - start.relY;
-                const radius = Math.sqrt(dx * dx + dy * dy) / 2;
-
-                const startAngle = Math.atan2(start.relY - cy, start.relX - cx);
-                const endAngle = Math.atan2(end.relY - cy, end.relX - cx);
-
-                // Add Arc
-                this.state.trajectory.add_circle(
-                    center, radius, startAngle, endAngle,
-                    this.state.penUp, start, end
-                );
-
-                this.state.points.push(end);
-                this.state.semicircleStart = null;
-                this.state.saveState();
             }
 
+            // If we are here, semicircleStart is set (either manually or auto)
+            const start = this.state.semicircleStart;
+            const end = currentPoint;
+
+            const cx = (start.relX + end.relX) / 2;
+            const cy = (start.relY + end.relY) / 2;
+            const center = new Point(cx, cy, settings);
+
+            const dx = end.relX - start.relX;
+            const dy = end.relY - start.relY;
+            const radius = Math.sqrt(dx * dx + dy * dy) / 2;
+
+            const startAngle = Math.atan2(start.relY - cy, start.relX - cx);
+            const endAngle = Math.atan2(end.relY - cy, end.relX - cx);
+
+            this.state.trajectory.add_circle(
+                center, radius, startAngle, endAngle,
+                this.state.penUp, start, end
+            );
+
+            this.state.points.push(end);
+            this.state.semicircleStart = null;
+            this.state.saveState();
+
         } else if ([TOOLS.CIRCLE, TOOLS.SQUARE, TOOLS.POLYGON].includes(currentTool)) {
-            // Centered Shapes: Center (Click 1) -> Radius/Corner (Click 2)
+            // These tools are always Center-Based (Discrete Interaction)
+            // But we must handle the 'Connect' vs 'Jump' logic
+
             if (!this.state.shapeStart) {
+                // Center Click
+                if (this.state.points.length > 0) {
+                    const last = this.state.points[this.state.points.length - 1];
+                    // Always Jump to Center (Pen Up)
+                    this.state.trajectory.add_line(last, currentPoint, true);
+                }
                 this.state.shapeStart = currentPoint;
                 this.state.points.push(currentPoint);
 
-                // If there was a previous point, this creates a jump (or line if pen down?)
-                // Usage: User clicks Center. Robot moves to Center.
-                // If chained (points > 1), we add a line P_prev -> Center.
-                if (this.state.points.length > 1) {
-                    const p_prev = this.state.points[this.state.points.length - 2];
-                    // We assume PenUp is desireable for moving to center of a new shape?
-                    // Or keep current pen state? Use true (Pen Up) for clean jump to center.
-                    this.state.trajectory.add_line(p_prev, currentPoint, true);
-                }
-
             } else {
-                // Second Click: Define Size/Rotation
+                // Size/Rotation Click
                 const center = this.state.shapeStart;
                 const corner = currentPoint;
 
                 const dx = corner.relX - center.relX;
                 const dy = corner.relY - center.relY;
                 const radius = Math.sqrt(dx * dx + dy * dy);
-                const rotation = Math.atan2(dy, dx); // Angle to corner
+                const rotation = Math.atan2(dy, dx);
 
                 if (currentTool === TOOLS.CIRCLE) {
                     const startAngle = rotation;
@@ -206,21 +278,18 @@ export class CanvasHandler {
                     this.state.points.push(startP);
 
                 } else {
-                    // SQUARE or POLYGON
                     const sides = (currentTool === TOOLS.SQUARE) ? 4 : (this.state.polygonSides || 5);
                     const polyPoints = calculatePolygon(center, radius, sides, rotation, settings);
 
                     // Move Center -> Vertex 0
                     this.state.trajectory.add_line(center, polyPoints[0], true);
 
-                    // Draw edges
                     for (let i = 0; i < polyPoints.length; i++) {
                         const p_start = polyPoints[i];
                         const p_end = polyPoints[(i + 1) % polyPoints.length];
                         this.state.trajectory.add_line(p_start, p_end, this.state.penUp);
                     }
 
-                    // End at Start Vertex
                     this.state.points.push(polyPoints[0]);
                 }
 
@@ -410,113 +479,124 @@ export class CanvasHandler {
         const mouseX = this.mouseX;
         const mouseY = this.mouseY;
 
-        // Draw Text Preview (Generated)
-        if (this.state.textPreview && this.state.textPreview.length > 0) {
-            const mp = this.state.settings.m_p;
-            const origin = this.state.settings.origin;
+        // --- TEXT MODE PREVIEW ---
+        if (this.state.appMode === 'text') {
+            // Draw Text Preview (Generated)
+            if (this.state.textPreview && this.state.textPreview.length > 0) {
+                const mp = this.state.settings.m_p;
+                const origin = this.state.settings.origin;
 
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
 
-            for (let patch of this.state.textPreview) {
-                if (patch.type === 'line') {
-                    const p0 = patch.points[0];
-                    const p1 = patch.points[1];
+                for (let patch of this.state.textPreview) {
+                    if (patch.type === 'line') {
+                        const p0 = patch.points[0];
+                        const p1 = patch.points[1];
 
-                    // Convert world meters to canvas pixels
-                    // x_pix = origin.x + x_m / mp
-                    // y_pix = origin.y - y_m / mp (Y up in world, Down in canvas)
+                        // Convert world meters to canvas pixels
+                        const x0 = origin.x + p0[0] / mp;
+                        const y0 = origin.y - p0[1] / mp;
+                        const x1 = origin.x + p1[0] / mp;
+                        const y1 = origin.y - p1[1] / mp;
 
-                    const x0 = origin.x + p0[0] / mp;
-                    const y0 = origin.y - p0[1] / mp;
-                    const x1 = origin.x + p1[0] / mp;
-                    const y1 = origin.y - p1[1] / mp;
+                        ctx.beginPath();
+                        ctx.moveTo(x0, y0);
+                        ctx.lineTo(x1, y1);
+                        if (patch.data.penup) {
+                            ctx.strokeStyle = 'rgba(255, 165, 0, 0.8)'; // Orange visible for jumps
+                            ctx.setLineDash([5, 5]);
+                            ctx.lineWidth = 1.5;
+                        } else {
+                            ctx.strokeStyle = '#ffffff';
+                            ctx.setLineDash([]);
+                            ctx.lineWidth = 2.0;
+                        }
+                        ctx.stroke();
+                    }
+                }
+                ctx.setLineDash([]);
+            }
+            return; // EXIT TEXT MODE
+        }
+
+        // --- DRAWING MODE PREVIEW ---
+        if (this.state.appMode === 'drawing') {
+            if (points.length === 0 && !this.state.semicircleStart && !this.state.shapeStart) return;
+
+            let lastP = null;
+            if (points.length > 0) lastP = points[points.length - 1];
+
+            const currentTool = this.state.tool;
+
+            if (currentTool === TOOLS.LINE && lastP) {
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.setLineDash([5, 5]);
+                ctx.lineWidth = 2;
+                ctx.moveTo(lastP.relX, lastP.relY);
+                ctx.lineTo(mouseX, mouseY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+            else if (currentTool === TOOLS.SEMICIRCLE) {
+                let start = this.state.semicircleStart;
+                // Infer start in continuous mode
+                if (!start && this.state.drawingMode === 'continuous' && points.length > 0) {
+                    start = points[points.length - 1];
+                }
+
+                if (start) {
+                    // Preview Arc
+                    const cx = (start.relX + mouseX) / 2;
+                    const cy = (start.relY + mouseY) / 2;
+                    const dx = mouseX - start.relX;
+                    const dy = mouseY - start.relY;
+                    const r = Math.sqrt(dx * dx + dy * dy) / 2;
+                    const a1 = Math.atan2(start.relY - cy, start.relX - cx);
+                    const a2 = Math.atan2(mouseY - cy, mouseX - cx);
 
                     ctx.beginPath();
-                    ctx.moveTo(x0, y0);
-                    ctx.lineTo(x1, y1);
-                    if (patch.data.penup) {
-                        ctx.strokeStyle = 'rgba(255, 165, 0, 0.8)'; // Orange visible for jumps
-                        ctx.setLineDash([5, 5]);
-                        ctx.lineWidth = 1.5;
-                    } else {
-                        ctx.strokeStyle = '#ffffff';
-                        ctx.setLineDash([]);
-                        ctx.lineWidth = 2.0;
-                    }
+                    ctx.strokeStyle = 'rgba(255, 165, 0, 0.7)'; // Orange
+                    ctx.setLineDash([5, 5]);
+                    ctx.lineWidth = 2;
+                    ctx.arc(cx, cy, r, a1, a2, false);
                     ctx.stroke();
+                    ctx.setLineDash([]);
                 }
             }
-            ctx.setLineDash([]);
-        }
+            else if (this.state.shapeStart && [TOOLS.CIRCLE, TOOLS.SQUARE, TOOLS.POLYGON].includes(currentTool)) {
+                const center = this.state.shapeStart;
+                const dx = mouseX - center.relX;
+                const dy = mouseY - center.relY;
+                const r = Math.sqrt(dx * dx + dy * dy);
+                const rot = Math.atan2(dy, dx);
 
-        if (points.length === 0 && !this.state.semicircleStart && !this.state.shapeStart) return;
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(0, 255, 127, 0.7)'; // Green
+                ctx.setLineDash([5, 5]);
+                ctx.lineWidth = 2;
 
-        let lastP = null;
-        if (points.length > 0) lastP = points[points.length - 1];
-
-        const currentTool = this.state.tool;
-
-        if (currentTool === TOOLS.LINE && lastP) {
-            ctx.beginPath();
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-            ctx.setLineDash([5, 5]);
-            ctx.lineWidth = 2;
-            ctx.moveTo(lastP.relX, lastP.relY);
-            ctx.lineTo(mouseX, mouseY);
-            ctx.stroke();
-            ctx.setLineDash([]);
-        }
-        else if (currentTool === TOOLS.SEMICIRCLE && this.state.semicircleStart) {
-            const start = this.state.semicircleStart;
-            // Preview Arc
-            const cx = (start.relX + mouseX) / 2;
-            const cy = (start.relY + mouseY) / 2;
-            const dx = mouseX - start.relX;
-            const dy = mouseY - start.relY;
-            const r = Math.sqrt(dx * dx + dy * dy) / 2;
-            const a1 = Math.atan2(start.relY - cy, start.relX - cx);
-            const a2 = Math.atan2(mouseY - cy, mouseX - cx);
-
-            ctx.beginPath();
-            ctx.strokeStyle = 'rgba(255, 165, 0, 0.7)'; // Orange
-            ctx.setLineDash([5, 5]);
-            ctx.lineWidth = 2;
-            ctx.arc(cx, cy, r, a1, a2, false);
-            ctx.stroke();
-            ctx.setLineDash([]);
-        }
-        else if (this.state.shapeStart && [TOOLS.CIRCLE, TOOLS.SQUARE, TOOLS.POLYGON].includes(currentTool)) {
-            const center = this.state.shapeStart;
-            const dx = mouseX - center.relX;
-            const dy = mouseY - center.relY;
-            const r = Math.sqrt(dx * dx + dy * dy);
-            const rot = Math.atan2(dy, dx);
-
-            ctx.beginPath();
-            ctx.strokeStyle = 'rgba(0, 255, 127, 0.7)'; // Green
-            ctx.setLineDash([5, 5]);
-            ctx.lineWidth = 2;
-
-            if (currentTool === TOOLS.CIRCLE) {
-                ctx.arc(center.relX, center.relY, r, 0, 2 * Math.PI);
-            } else {
-                const sides = (currentTool === TOOLS.SQUARE) ? 4 : (this.state.polygonSides || 5);
-                const pts = calculatePolygon(center, r, sides, rot, settings);
-                if (pts.length > 0) {
-                    ctx.moveTo(pts[0].relX, pts[0].relY);
-                    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].relX, pts[i].relY);
-                    ctx.closePath();
+                if (currentTool === TOOLS.CIRCLE) {
+                    ctx.arc(center.relX, center.relY, r, 0, 2 * Math.PI);
+                } else {
+                    const sides = (currentTool === TOOLS.SQUARE) ? 4 : (this.state.polygonSides || 5);
+                    const pts = calculatePolygon(center, r, sides, rot, settings);
+                    if (pts.length > 0) {
+                        ctx.moveTo(pts[0].relX, pts[0].relY);
+                        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].relX, pts[i].relY);
+                        ctx.closePath();
+                    }
                 }
-            }
-            ctx.stroke();
-            ctx.setLineDash([]);
+                ctx.stroke();
+                ctx.setLineDash([]);
 
-            // Draw Center
-            ctx.beginPath();
-            ctx.fillStyle = 'rgba(0, 255, 127, 0.5)';
-            ctx.arc(center.relX, center.relY, 3, 0, 2 * Math.PI);
-            ctx.fill();
+                // Draw Center
+                ctx.beginPath();
+                ctx.fillStyle = 'rgba(0, 255, 127, 0.5)';
+                ctx.arc(center.relX, center.relY, 3, 0, 2 * Math.PI);
+                ctx.fill();
+            }
         }
     }
 
@@ -550,9 +630,35 @@ export class CanvasHandler {
         // Tool Preview
         this.drawToolPreview();
 
+        // Text Preview (Generated Patches) - Redundant, now handled by drawToolPreview
+        // if (this.state.textPreview && this.state.textPreview.length > 0) { ... }
+
+
+        // Draw Anchors in United Mode
+        if (this.state.drawingMode === 'continuous') {
+            this.drawAnchors();
+        }
+
         // Draw Coordinates (always on top)
         this.drawCoordinates();
 
         requestAnimationFrame(() => this.animate());
+    }
+
+    drawAnchors() {
+        const ctx = this.ctx;
+        const points = this.state.points;
+        const radius = 4;
+
+        ctx.fillStyle = '#00ffcc'; // Bright Cyan
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+
+        for (let p of points) {
+            ctx.beginPath();
+            ctx.arc(p.relX, p.relY, radius, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.stroke();
+        }
     }
 }

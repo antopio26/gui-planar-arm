@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
     # Initialize Serial (Try to connect)
     SETTINGS['ser_started'] = scm.ser_init(SERIAL_PORT)
-    if not SETTINGS['ser_started']:
+    if not SETTINGS['ser_started']:   
         print("No serial could be found, continuing anyway for GUI debug.")
 
     # Start Serial Monitor

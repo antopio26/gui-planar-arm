@@ -22,7 +22,7 @@ SIZES = {
 # Web Server Options
 WEB_OPTIONS = {
     'host': 'localhost',
-    'port': 6969
+    'port': 0 # 0 = Random free port to avoid 'Address in use' errors
 }
 
 # Trajectory Validation Limits

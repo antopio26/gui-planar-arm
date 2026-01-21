@@ -33,12 +33,16 @@ def read_position_cartesian() -> list[float]:
     return [points[0,0], points[1,0]]
 
 def validate_trajectory(q, dq, ddq):
+    """
+    Validate trajectory against speed/acceleration limits.
+    Returns: (is_valid, scale_factor)
+    - is_valid: True if within limits (possibly after scaling)
+    - scale_factor: Factor to multiply time intervals by (1.0 if already valid, >1.0 if needs slowing)
+    """
     print("\n--- TRAJECTORY VALIDATION ---")
     MAX_ACC_RAD = SETTINGS['max_acc'] * MAX_ACC_TOLERANCE_FACTOR
     
-    valid = True
-    
-    # 1. Check Limits
+    # Find maximum velocity and acceleration
     max_v = 0.0
     max_a = 0.0
     
@@ -50,22 +54,24 @@ def validate_trajectory(q, dq, ddq):
         
         max_v = max(max_v, v0, v1)
         max_a = max(max_a, a0, a1)
-        
-        if v0 > MAX_SPEED_RAD or v1 > MAX_SPEED_RAD:
-            print(f"[!] VELOCITY VIOLATION at index {i}: {max(v0,v1):.2f} rad/s > {MAX_SPEED_RAD}")
-            valid = False
-        if a0 > MAX_ACC_RAD or a1 > MAX_ACC_RAD:
-            print(f"[!] ACCELERATION VIOLATION at index {i}: {max(a0,a1):.2f} rad/s^2 > {MAX_ACC_RAD}")
-            valid = False
-            
-    print(f"Stats: Max Vel={max_v:.2f}, Max Acc={max_a:.2f}")
     
-    if not valid:
-        print("!!! TRAJECTORY UNSAFE - ABORTING SUGGESTED !!!")
+    print(f"Stats: Max Vel={max_v:.2f} rad/s (limit: {MAX_SPEED_RAD}), Max Acc={max_a:.2f} rad/s^2 (limit: {MAX_ACC_RAD:.2f})")
+    
+    # Calculate required scale factor
+    # For velocity: v' = v / scale -> need scale >= v / v_max
+    # For acceleration: a' = a / scale^2 -> need scale >= sqrt(a / a_max)
+    scale_v = max_v / MAX_SPEED_RAD if max_v > MAX_SPEED_RAD else 1.0
+    scale_a = (max_a / MAX_ACC_RAD) ** 0.5 if max_a > MAX_ACC_RAD else 1.0
+    
+    scale_factor = max(scale_v, scale_a)
+    
+    if scale_factor > 1.0:
+        print(f"[!] Trajectory exceeds limits. Auto-scaling by factor {scale_factor:.2f}x (slower)")
+        print(f"    New max vel: {max_v/scale_factor:.2f} rad/s, New max acc: {max_a/(scale_factor**2):.2f} rad/s^2")
+        return (True, scale_factor)
     else:
         print("Trajectory Dynamics: OK")
-
-    return valid
+        return (True, 1.0)
 
 def trace_trajectory(q:tuple[list,list]):
     q1 = q[0][:]
@@ -123,8 +129,19 @@ def py_get_data():
         dq = (tpy.find_velocities(q[0], ts), tpy.find_velocities(q[1], ts))
         ddq = (tpy.find_accelerations(dq[0], ts), tpy.find_accelerations(dq[1], ts))
         
-        if not validate_trajectory(q, dq, ddq):
-            raise Exception("Trajectory Validation Failed: Safety limit exceeded. Execution aborted.")
+        # Validate and get scale factor
+        (is_valid, scale_factor) = validate_trajectory(q, dq, ddq)
+        
+        # Apply scaling if needed
+        if scale_factor > 1.0:
+            print(f"Applying time scaling factor: {scale_factor:.2f}x")
+            # Scale time intervals
+            ts_scaled = [t * scale_factor for t in ts]
+            # Recalculate velocities and accelerations with scaled time
+            dq = (tpy.find_velocities(q[0], ts_scaled), tpy.find_velocities(q[1], ts_scaled))
+            ddq = (tpy.find_accelerations(dq[0], ts_scaled), tpy.find_accelerations(dq[1], ts_scaled))
+            ts = ts_scaled
+            print(f"Trajectory scaled. New duration: {ts[-1]:.2f}s")
             
         state.stop_requested = False # Reset flag before start
         serial_manager.send_data('trj', q=q, dq=dq, ddq=ddq)
@@ -238,6 +255,12 @@ def py_serial_startup():
     print(f"Calling scm.ser_init({SERIAL_PORT})...")
     SETTINGS['ser_started'] = scm.ser_init(SERIAL_PORT)
     print(f"Serial Started? {SETTINGS['ser_started']}")
+
+@eel.expose
+def py_get_position():
+    # Return current robot state for Polling (Backup for Push)
+    q0, q1, pen_up = state.firmware.get_position()
+    return [q0, q1, pen_up]
 
 @eel.expose
 def py_clear_state():
@@ -355,16 +378,8 @@ def py_generate_text(text, options):
                 y = float(options.get('y', 0.0))
                 angle = float(options.get('angle', 0.0))
                 
-                # Validate ranges
-                if not (-0.3 <= x <= 0.3):
-                    print(f"X offset out of range: {x}")
-                    return []
-                if not (-0.3 <= y <= 0.3):
-                    print(f"Y offset out of range: {y}")
-                    return []
-                if not (-180 <= angle <= 180):
-                    print(f"Angle out of range: {angle}")
-                    return []
+                # Removed strict range validation - frontend handles geometry validation
+                # Robot reach is ~0.328m, so values up to 0.35 are reasonable
                     
                 final_patches = _apply_linear_transform(patches, x, y, angle)
             except (ValueError, TypeError) as e:
@@ -376,12 +391,10 @@ def py_generate_text(text, options):
                 radius = float(options.get('radius', 0.2))
                 offset = float(options.get('offset', 90))
                 
-                # Validate ranges
-                if not (0.05 <= radius <= 0.35):
-                    print(f"Radius out of range: {radius}")
-                    return []
-                if not (-360 <= offset <= 360):
-                    print(f"Offset angle out of range: {offset}")
+                # Removed strict range validation - frontend handles geometry validation
+                # Just ensure radius is positive
+                if radius <= 0:
+                    print(f"Radius must be positive: {radius}")
                     return []
                     
                 final_patches = _apply_curved_transform(patches, radius, offset)

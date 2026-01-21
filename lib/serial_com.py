@@ -1,61 +1,92 @@
 import serial
 import time
 import serial.tools.list_ports
+from lib import binary_protocol as bp
 
 ser = None # serial object
 
-def ser_init(serial_path:str) -> bool:
+def verify_connection(s):
+    """Helper to verify connection by sending a handshake."""
+    try:
+        print(f"Verifying connection on {s.port}...")
+        s.reset_input_buffer()
+        s.reset_output_buffer()
+        
+        # Send Handshake (Pos Request)
+        print("Sending handshake...")
+        packet = bp.encode_pos_command()
+        s.write(packet)
+        print("Handshake sent. Waiting for response...")
+        
+        # Wait for response (Max 0.5s)
+        start_t = time.time()
+        buffer = b''
+        while time.time() - start_t < 0.5:
+            if s.in_waiting:
+                buffer += s.read(s.in_waiting)
+                # Check if we have enough for header(2) + type(1)
+                if len(buffer) >= 3:
+                    # Try to decode
+                    if buffer[0] == bp.START_BYTE_1 and buffer[1] == bp.START_BYTE_2:
+                            # It looks like our protocol
+                            print("Handshake OK: Valid Header found.")
+                            return True
+            time.sleep(0.05)
+        
+        print("Handshake Failed: No valid response.")
+        return False
+    except Exception as e:
+        print(f"Handshake Error on {s.port}: {e}")
+        return False
+
+def ser_init(serial_path:str = None) -> bool:
     global ser 
     print("Starting Serial Connection:\n")
-    found = False
     
-    if serial_path is None:
-        # Auto-discovery of STM32 Virtual COM Port
-        # STM32 VCP usually has specific VID/PID, but we'll scan generally for now
-        ports = serial.tools.list_ports.comports()
-        for port in ports:
-            # You might want to filter by VID:PID here if known
-            # e.g., if "STM32" in port.description:
-            try:
-                print(f"Trying {port.device}...")
-                ser = serial.Serial(port.device, 115200, timeout=1) 
-                found = True
-                print(f"Connected to {port.device}")
-                break
-            except Exception as e:
-                print(f"Failed to connect to {port.device}: {e}")
-                
-        if not found:
-             # Fallback to hardcoded list if auto-discovery fails or for specific OS
-             # On Linux this is usually /dev/ttyACM* or /dev/ttyUSB*
-             candidate_ports = ['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyUSB0', 'COM3', 'COM4']
-             for p in candidate_ports:
-                 try:
-                     ser = serial.Serial(p, 115200, timeout=1)
-                     found = True
-                     print(f"Connected to {p}")
-                     break
-                 except:
-                     pass
+    # 1. candidate ports list
+    candidates = []
+    if serial_path:
+        # If user specified a path, try ONLY that one first (or we could just add it to list)
+        candidates.append(serial_path)
     else:
-        try:
-            ser = serial.Serial(serial_path, 115200, timeout=1)  # open serial port
-            found = True
-        except Exception as e:
-            print(f"{serial_path} failed: {e}\n")
-            found = False
-            
-    if found:
-        # Auto-Reset the board via DTR
-        ser.dtr = False
-        time.sleep(0.1)
-        ser.dtr = True
-        time.sleep(2.0) # Wait for board reboot
+        # Auto-discovery
+        system_ports = serial.tools.list_ports.comports()
+        candidates = [p.device for p in system_ports]
+    
+    if not candidates:
+        print("No serial ports found.")
+        return False
 
-        ser.reset_input_buffer()
-        ser.reset_output_buffer()
-        
-    return found
+    # 2. Try to connect
+    for port in candidates:
+        try:
+            print(f"Trying {port}...")
+            # Add write_timeout to prevent blocking forever
+            temp_ser = serial.Serial(port, 115200, timeout=0.1, write_timeout=0.5) 
+            
+            # Auto-Reset DTR logic (Standard for Arduinos/STM32)
+            temp_ser.dtr = False
+            time.sleep(0.1)
+            temp_ser.dtr = True
+            time.sleep(1.0) # Wait for reboot
+            
+            if verify_connection(temp_ser):
+                ser = temp_ser
+                print(f"Connected to {port}")
+                
+                # Cleanup buffers before starting real work
+                ser.reset_input_buffer()
+                ser.reset_output_buffer()
+                return True
+            else:
+                temp_ser.close()
+                
+        except Exception as e:
+            print(f"Failed to connect to {port}: {e}")
+            
+    # 3. Fail
+    print("Could not connect to any serial device.")
+    return False
 
 def write_serial(msg:str) -> bool:
     """Legacy string write"""
@@ -112,3 +143,4 @@ def serial_close():
             ser.close() # close port
         except:
             pass
+    ser = None

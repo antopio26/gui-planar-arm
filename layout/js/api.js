@@ -11,6 +11,11 @@ export const API = {
         await window.eel.py_serial_startup()();
     },
 
+    async getPosition() {
+        if (!window.eel) return [0, 0, false];
+        return await window.eel.py_get_position()();
+    },
+
     async homing() {
         if (!window.eel) return;
         await window.eel.py_homing_cmd()();

@@ -42,10 +42,43 @@
                 <button id="start-serial-btn" class="btn">Connect Serial</button>
             </div>
 
+            <!-- Application Mode Switcher -->
             <div class="control-group">
+                <div class="group-title">Application Mode</div>
+                <div style="display: flex; gap: 5px;">
+                    <button id="app-mode-drawing" class="btn active" title="Enable Manual Drawing">✏️ Drawing</button>
+                    <button id="app-mode-text" class="btn" title="Enable Text Generation">📝 Text</button>
+                </div>
+
+                <!-- Workspace Mode Selector (Moved here) -->
+                <div style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 5px;">
+                    <div class="control-group-label"
+                        style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 5px;">Workspace Geometry
+                    </div>
+                    <div class="toggle-row">
+                        <button id="mode-linear-btn" class="btn active sm">Linear</button>
+                        <button id="mode-curved-btn" class="btn sm">Curved</button>
+                    </div>
+                </div>
+
+                <!-- Action Buttons (Undo/Redo/Clear) - Available in all modes -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 10px;">
+                    <button id="undo-btn" class="btn sm" title="Undo (Ctrl+Z)">↶ Undo</button>
+                    <button id="redo-btn" class="btn sm" title="Redo (Ctrl+Y)">↷ Redo</button>
+                    <button id="clear-btn" class="btn sm" title="Clear Drawing (Delete)">🗑️ Clear</button>
+                </div>
+            </div>
+
+            <div id="section-drawing-tools" class="control-group">
                 <div class="group-title">Drawing Tools</div>
 
-                <!-- Main Drawing Tools -->
+                <!-- Drawing Mode -->
+                <div class="control-group-label" style="margin-bottom: 5px;">Drawing Mode</div>
+                <div style="display: flex; gap: 5px; margin-bottom: 15px;">
+                    <button id="mode-continuous-btn" class="btn active" title="Chain shapes (United)">🔗 United</button>
+                    <button id="mode-discrete-btn" class="btn" title="Separate shapes (Discrete)">✂ Separated</button>
+                </div>
+
                 <!-- Main Drawing Tools -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 10px;">
                     <button id="tool-line" class="btn active" data-tool="line" title="Linear Tool">📏 Linear</button>
@@ -59,13 +92,6 @@
                 <!-- Pen Control -->
                 <button id="penup-btn" class="btn" title="Toggle Pen Up/Down">✏️ Toggle Pen Up</button>
 
-                <!-- Action Buttons -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; margin-top: 10px;">
-                    <button id="undo-btn" class="btn sm" title="Undo (Ctrl+Z)">↶ Undo</button>
-                    <button id="redo-btn" class="btn sm" title="Redo (Ctrl+Y)">↷ Redo</button>
-                    <button id="clear-btn" class="btn sm" title="Clear Drawing (Delete)">🗑️ Clear</button>
-                </div>
-
                 <!-- Grid Options -->
                 <div style="margin-top: 10px;">
                     <button id="grid-toggle-btn" class="btn sm" title="Toggle Grid (G)">⊞ Grid: OFF</button>
@@ -73,13 +99,10 @@
                 </div>
             </div>
 
-            <div class="control-group">
+            <div id="section-text-tools" class="control-group">
                 <div class="group-title">Text Tools</div>
 
-                <div class="toggle-row">
-                    <button id="mode-linear-btn" class="btn active sm">Linear</button>
-                    <button id="mode-curved-btn" class="btn sm">Curved</button>
-                </div>
+
 
                 <textarea id="text-input" placeholder="Enter text..." class="input-full" rows="1"></textarea>
 
@@ -126,44 +149,23 @@
 
                 <div id="text-warning" class="warning-msg hidden">⚠ Text exceeds workspace!</div>
 
-                <div class="toggle-row">
-                    <button id="generate-text-btn" class="btn primary sm">Generate Text</button>
-                    <button id="newline-btn" class="btn sm">New Line ↵</button>
-                    <button id="clean-text-btn" class="btn sm">Clean Text</button>
-                </div>
+                <!-- Redundant buttons removed as requested -->
+                <div style="height: 10px;"></div>
                 <div style="height: 10px;"></div>
             </div>
 
-            <div class="control-group">
-                <div class="group-title">Saved Templates</div>
 
-                <div class="input-row">
-                    <input type="text" id="template-name" placeholder="Filename..." class="input-full"
-                        style="margin-bottom: 5px;">
-                    <button id="save-template-btn" class="btn sm">Save</button>
-                </div>
-
-                <div class="input-row">
-                    <select id="template-select" class="input-full" style="margin-bottom: 5px;">
-                        <option value="">Select Template...</option>
-                    </select>
-                    <button id="load-template-btn" class="btn sm">Load</button>
-                    <button id="delete-template-btn" class="btn sm"
-                        style="background-color: #e74c3c; color: white;">Delete</button>
-                </div>
-                <div class="input-row" style="justify-content: flex-end;">
-                    <button id="refresh-templates-btn" class="btn sm" style="font-size: 0.7em;">↻ Refresh</button>
-                </div>
-            </div>
 
             <div class="control-group">
-                <div class="group-title">Commands</div>
-                <button id="send-data-btn" class="btn primary">Send Trajectory</button>
-                <button id="stop-traj-btn" class="btn" style="background-color: #e74c3c; color: white;">Arresta
-                    Traiettoria</button>
-                <div style="height: 5px;"></div>
-                <button id="homing-btn" class="btn">Homing</button>
-                <button id="repeatable-btn" class="btn">Demo Trajectory</button>
+                <div class="group-title">Trajectory Control</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                    <button id="send-trajectory-btn" class="btn primary" title="Generate & Send Trajectory">Generate
+                        Trajectory</button>
+                    <button id="stop-trajectory-btn" class="btn" style="background-color: #e74c3c; color: white;"
+                        title="EMERGENCY STOP">STOP</button>
+                    <button id="homing-btn" class="btn" title="Return to Home">Homing</button>
+                    <button id="clean-state-btn" class="btn" title="Clean State">Clean</button>
+                </div>
             </div>
 
             <div id="console-output" style="margin-top: auto; font-size: 0.8em; color: var(--text-muted);">
