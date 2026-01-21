@@ -21,12 +21,11 @@ const ui = {
     statusText: document.getElementById('status-text'),
     btnConnect: document.getElementById('start-serial-btn'),
 
-    btnLine: document.getElementById('line-btn'),
-    btnCircle: document.getElementById('circle-btn'),
-    btnRectangle: document.getElementById('rectangle-btn'),
-    btnPolygon: document.getElementById('polygon-btn'),
-    btnSemicircle: document.getElementById('semicircle-btn'),
-    btnFullcircle: document.getElementById('fullcircle-btn'),
+    btnLine: document.getElementById('tool-line'),
+    btnCircle: document.getElementById('tool-circle'),
+    btnSquare: document.getElementById('tool-square'),
+    btnPolygon: document.getElementById('tool-polygon'),
+    btnSemicircle: document.getElementById('tool-semicircle'),
     btnPen: document.getElementById('penup-btn'),
 
     btnUndo: document.getElementById('undo-btn'),
@@ -100,23 +99,22 @@ ui.btnCircle.addEventListener('click', () => {
     updateToolUI();
 });
 
-ui.btnRectangle.addEventListener('click', () => {
-    setTool(TOOLS.RECTANGLE);
+ui.btnSquare.addEventListener('click', () => {
+    setTool(TOOLS.SQUARE);
     updateToolUI();
 });
 
 ui.btnPolygon.addEventListener('click', () => {
-    setTool(TOOLS.POLYGON);
-    updateToolUI();
+    const sides = prompt("How many sides?", state.polygonSides || "6");
+    if (sides && !isNaN(sides) && parseInt(sides) >= 3) {
+        state.polygonSides = parseInt(sides);
+        setTool(TOOLS.POLYGON);
+        updateToolUI();
+    }
 });
 
 ui.btnSemicircle.addEventListener('click', () => {
     setTool(TOOLS.SEMICIRCLE);
-    updateToolUI();
-});
-
-ui.btnFullcircle.addEventListener('click', () => {
-    setTool(TOOLS.FULLCIRCLE);
     updateToolUI();
 });
 
@@ -702,15 +700,15 @@ function setTool(tool) {
     state.rectangleStart = null; // Reset rectangle start
     state.semicircleStart = null; // Reset semicircle start
     state.fullcircleStart = null; // Reset fullcircle start
+    state.shapeStart = null;
 }
 
 function updateToolUI() {
     ui.btnLine.classList.toggle('active', state.tool === TOOLS.LINE);
     ui.btnCircle.classList.toggle('active', state.tool === TOOLS.CIRCLE);
-    ui.btnRectangle.classList.toggle('active', state.tool === TOOLS.RECTANGLE);
+    ui.btnSquare.classList.toggle('active', state.tool === TOOLS.SQUARE);
     ui.btnPolygon.classList.toggle('active', state.tool === TOOLS.POLYGON);
     ui.btnSemicircle.classList.toggle('active', state.tool === TOOLS.SEMICIRCLE);
-    ui.btnFullcircle.classList.toggle('active', state.tool === TOOLS.FULLCIRCLE);
 }
 
 function updateUndoRedoUI() {

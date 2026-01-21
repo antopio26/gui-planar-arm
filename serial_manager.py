@@ -42,8 +42,7 @@ class SerialManager:
                                             full_packet = b1 + b2 + b_type + payload
                                             feedback = bp.decode_feedback(full_packet)
                                             if feedback and feedback['type'] == bp.RESP_POS:
-                                                state.firmware.q0 = feedback['q0']
-                                                state.firmware.q1 = feedback['q1']
+                                                state.firmware.update_position(feedback['q0'], feedback['q1'])
                                                 state.firmware.last_update = time()
                                                 
                                                 if state.recording_active:
@@ -56,7 +55,7 @@ class SerialManager:
                                             full_packet = b1 + b2 + b_type + payload
                                             feedback = bp.decode_feedback(full_packet)
                                             if feedback and 'buffer_level' in feedback:
-                                                state.firmware.buffer_level = feedback['buffer_level']
+                                                state.firmware.update_buffer(feedback['buffer_level'])
                         else:
                             # If not a start byte, consume it to realign
                             pass
@@ -67,7 +66,8 @@ class SerialManager:
             # Update GUI with current position (Always, even if offline)
             if time() - last_gui_update > GUI_UPDATE_INTERVAL:
                 try:
-                    eel.js_draw_pose([state.firmware.q0, state.firmware.q1, state.firmware.pen_up])
+                    q0, q1, pen_up = state.firmware.get_position()
+                    eel.js_draw_pose([q0, q1, pen_up])
                 except:
                     pass
                 last_gui_update = time()
@@ -139,9 +139,11 @@ class SerialManager:
                         # Update State for UI Visualization (Commanded Position)
                         # This allows seeing the arm move even if feedback is silent
                         current_idx = limit - 1
-                        state.firmware.q0 = data['q'][0][current_idx]
-                        state.firmware.q1 = data['q'][1][current_idx]
-                        state.firmware.pen_up = bool(data['q'][2][current_idx])
+                        state.firmware.update_position(
+                            data['q'][0][current_idx],
+                            data['q'][1][current_idx],
+                            bool(data['q'][2][current_idx])
+                        )
 
                         if sent_count % 100 == 0:
                             print(f"Progress: {sent_count}/{num_points}")
@@ -151,8 +153,7 @@ class SerialManager:
                     else:
                         print(f"TRJ SENT COMPLETE: {num_points} points")
                         # Ensure final position is set
-                        state.firmware.q0 = data['q'][0][-1]
-                        state.firmware.q1 = data['q'][1][-1]
+                        state.firmware.update_position(data['q'][0][-1], data['q'][1][-1])
                         
                         # Wait for the trajectory to finish physically
                         total_duration = num_points * SETTINGS['Tc']
@@ -179,14 +180,17 @@ class SerialManager:
                         loop_start = time()
 
                         # Update State
-                        state.firmware.q0 = data['q'][0][i]
-                        state.firmware.q1 = data['q'][1][i]
-                        state.firmware.pen_up = bool(data['q'][2][i])
+                        state.firmware.update_position(
+                            data['q'][0][i],
+                            data['q'][1][i],
+                            bool(data['q'][2][i])
+                        )
                         state.firmware.last_update = loop_start
                         
                         # Notify UI (Animation)
                         try:
-                            eel.js_draw_pose([state.firmware.q0, state.firmware.q1, state.firmware.pen_up])
+                            q0, q1, pen_up = state.firmware.get_position()
+                            eel.js_draw_pose([q0, q1, pen_up])
                         except:
                             pass # Ignore if eel closed
 

@@ -3,14 +3,10 @@ import { Trajectory } from './trajectory.js';
 
 export const TOOLS = {
     LINE: 'line',
-    CIRCLE: 'circle',
-    RECTANGLE: 'rectangle',
-    POLYGON: 'polygon',
-    ELLIPSE: 'ellipse',
-    ARC: 'arc',
-    FREEHAND: 'freehand',
     SEMICIRCLE: 'semicircle',
-    FULLCIRCLE: 'fullcircle'
+    CIRCLE: 'circle',
+    SQUARE: 'square',
+    POLYGON: 'polygon'
 };
 
 class StateManager {
@@ -62,6 +58,7 @@ class StateManager {
         this.rectangleStart = null;
         this.semicircleStart = null;
         this.fullcircleStart = null;
+        this.shapeStart = null;
     }
 
     init(canvasWidth, canvasHeight) {

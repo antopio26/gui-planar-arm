@@ -28,3 +28,6 @@ WEB_OPTIONS = {
 # Trajectory Validation Limits
 MAX_SPEED_RAD = 10.0
 MAX_ACC_TOLERANCE_FACTOR = 15.0
+
+# Debug Mode (set to True for development, False for production)
+DEBUG_MODE = False

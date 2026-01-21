@@ -4,7 +4,7 @@ import traceback
 from time import sleep
 
 from lib import trajpy as tpy
-from config import SETTINGS, SIZES, MAX_SPEED_RAD, MAX_ACC_TOLERANCE_FACTOR, SERIAL_PORT
+from config import SETTINGS, SIZES, MAX_SPEED_RAD, MAX_ACC_TOLERANCE_FACTOR, SERIAL_PORT, DEBUG_MODE
 from state import state
 from serial_manager import serial_manager
 from lib import serial_com as scm
@@ -74,10 +74,11 @@ def trace_trajectory(q:tuple[list,list]):
     eel.js_draw_pose([q1[-1], q2[-1]])
 
     # DEBUG
-    x = [] 
-    for i in range(len(q1)):
-        x.append(tpy.dk(np.array([q1[i], q2[i]]).T))
-    plotting.debug_plotXY([xt[0] for xt in x], [yt[1] for yt in x], "xy")
+    if DEBUG_MODE:
+        x = [] 
+        for i in range(len(q1)):
+            x.append(tpy.dk(np.array([q1[i], q2[i]]).T))
+        plotting.debug_plotXY([xt[0] for xt in x], [yt[1] for yt in x], "xy")
 
 # --- EEL EXPOSED FUNCTIONS ---
 
@@ -134,12 +135,13 @@ def py_get_data():
         trace_trajectory(q)
         
         # DEBUG PLOTS
-        plotting.debug_plot(q[0], 'q1')
-        plotting.debug_plot(dq[0], 'dq1')
-        plotting.debug_plot(ddq[0], 'ddq1')
-        plotting.debug_plot(q[1], 'q2')
-        plotting.debug_plot(dq[1], 'dq2')
-        plotting.debug_plot(ddq[1], 'ddq2')
+        if DEBUG_MODE:
+            plotting.debug_plot(q[0], 'q1')
+            plotting.debug_plot(dq[0], 'dq1')
+            plotting.debug_plot(ddq[0], 'ddq1')
+            plotting.debug_plot(q[1], 'q2')
+            plotting.debug_plot(dq[1], 'dq2')
+            plotting.debug_plot(ddq[1], 'ddq2')
 
     except Exception as e:
         print(f"Error in py_get_data: {e}")
@@ -158,19 +160,7 @@ def py_stop_trajectory():
         except Exception as e:
             print(f"Failed to send STOP command: {e}")
 
-@eel.expose
-def py_log_data():
-    # Deprecated or needs update if used? 
-    # original logic wrote to 'log_data.csv' from global dict
-    # Re-implementing basic dump
-    try:
-        with open('log_data.csv', 'w') as f:
-            f.write("time,q0,q1\n") # Minimal header
-            # Dump state.log_data if populated (currently empty in init)
-            # The original code logic was a bit weird constructing string
-            pass
-    except Exception as e:
-        print(e)
+
 
 @eel.expose
 def py_homing_cmd():
@@ -327,11 +317,30 @@ def _apply_curved_transform(patches, radius, offset_angle):
 def py_generate_text(text, options):
     print(f"Generating Text: '{text}' with options: {options}")
     try:
-        if not text: return []
+        # Input Validation
+        if not text or not isinstance(text, str):
+            print("Invalid text input: empty or not a string")
+            return []
         
+        if len(text) > 100:
+            print(f"Text too long: {len(text)} chars (max 100)")
+            return []
+        
+        # Validate mode
         mode = options.get('mode', 'linear')
-        font_size = float(options.get('fontSize', 0.05))
+        if mode not in ['linear', 'curved']:
+            print(f"Invalid mode: {mode}")
+            return []
         
+        # Validate numeric parameters
+        try:
+            font_size = float(options.get('fontSize', 0.05))
+            if not (0.01 <= font_size <= 0.2):
+                print(f"Font size out of range: {font_size} (valid: 0.01-0.2)")
+                return []
+        except (ValueError, TypeError) as e:
+            print(f"Invalid fontSize: {e}")
+            return []
         
         # 1. Generate Base Text (Linear, at origin)
         # We pass start_pos=(0,0) and handle placement via transform
@@ -341,15 +350,44 @@ def py_generate_text(text, options):
         final_patches = []
         
         if mode == 'linear':
-            x = float(options.get('x', 0.05))
-            y = float(options.get('y', 0.0))
-            angle = float(options.get('angle', 0.0))
-            final_patches = _apply_linear_transform(patches, x, y, angle)
+            try:
+                x = float(options.get('x', 0.05))
+                y = float(options.get('y', 0.0))
+                angle = float(options.get('angle', 0.0))
+                
+                # Validate ranges
+                if not (-0.3 <= x <= 0.3):
+                    print(f"X offset out of range: {x}")
+                    return []
+                if not (-0.3 <= y <= 0.3):
+                    print(f"Y offset out of range: {y}")
+                    return []
+                if not (-180 <= angle <= 180):
+                    print(f"Angle out of range: {angle}")
+                    return []
+                    
+                final_patches = _apply_linear_transform(patches, x, y, angle)
+            except (ValueError, TypeError) as e:
+                print(f"Invalid linear parameters: {e}")
+                return []
             
         elif mode == 'curved':
-            radius = float(options.get('radius', 0.2))
-            offset = float(options.get('offset', 90))
-            final_patches = _apply_curved_transform(patches, radius, offset)
+            try:
+                radius = float(options.get('radius', 0.2))
+                offset = float(options.get('offset', 90))
+                
+                # Validate ranges
+                if not (0.05 <= radius <= 0.35):
+                    print(f"Radius out of range: {radius}")
+                    return []
+                if not (-360 <= offset <= 360):
+                    print(f"Offset angle out of range: {offset}")
+                    return []
+                    
+                final_patches = _apply_curved_transform(patches, radius, offset)
+            except (ValueError, TypeError) as e:
+                print(f"Invalid curved parameters: {e}")
+                return []
             
         else:
             final_patches = patches

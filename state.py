@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
+import threading
 
 @dataclass
 class FirmwareState:
@@ -8,6 +9,25 @@ class FirmwareState:
     pen_up: bool = True
     buffer_level: int = 0
     last_update: float = 0
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    
+    def update_position(self, q0: float, q1: float, pen_up: bool = None):
+        """Thread-safe position update"""
+        with self._lock:
+            self.q0 = q0
+            self.q1 = q1
+            if pen_up is not None:
+                self.pen_up = pen_up
+    
+    def get_position(self) -> tuple:
+        """Thread-safe position read"""
+        with self._lock:
+            return (self.q0, self.q1, self.pen_up)
+    
+    def update_buffer(self, level: int):
+        """Thread-safe buffer level update"""
+        with self._lock:
+            self.buffer_level = level
     
 @dataclass
 class RobotState:

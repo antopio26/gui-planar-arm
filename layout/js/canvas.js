@@ -1,6 +1,6 @@
 import { Point, find_circ } from './utils.js';
 import { appState, TOOLS } from './state.js';
-import { calculateRectangle, snapPointToGrid } from './utils_drawing.js';
+import { calculateRectangle, calculatePolygon, snapPointToGrid } from './utils_drawing.js';
 
 export class CanvasHandler {
     constructor(canvas, state) {
@@ -81,7 +81,7 @@ export class CanvasHandler {
 
         // Radius check (workspace limit)
         const distSq = Math.pow(x - settings.origin.x, 2) + Math.pow(y - settings.origin.y, 2);
-        const maxRadius = this.workspaceRadius || (this.canvas.height / 2); // Fallback
+        const maxRadius = this.workspaceRadius || (this.canvas.height / 2);
 
         if (distSq > maxRadius * maxRadius) return;
 
@@ -92,156 +92,139 @@ export class CanvasHandler {
         }
 
         const currentTool = this.state.tool;
+        const currentPoint = new Point(x, y, settings);
 
         if (currentTool === TOOLS.LINE) {
-            this.state.circleDefinition = [];
-
-            const newPoint = new Point(x, y, settings);
-            this.state.points.push(newPoint);
+            this.state.points.push(currentPoint);
 
             if (this.state.points.length > 1) {
                 const p0 = this.state.points[this.state.points.length - 2];
                 const p1 = this.state.points[this.state.points.length - 1];
                 this.state.trajectory.add_line(p0, p1, this.state.penUp);
-                this.state.saveState(); // Save to history
+                this.state.saveState();
             }
 
-        } else if (currentTool === TOOLS.CIRCLE) {
-            if (this.state.points.length === 0) {
-                this.state.points.push(new Point(x, y, settings));
-            } else {
-                this.state.circleDefinition.push(new Point(x, y, settings));
-
-                if (this.state.circleDefinition.length === 2) {
-                    const params = find_circ(this.state.points, this.state.circleDefinition, settings);
-                    this.state.trajectory.add_circle(
-                        params.c, params.r, params.theta_0, params.theta_1,
-                        this.state.penUp, params.a, params.p
-                    );
-
-                    this.state.points.push(params.p);
-                    this.state.circleDefinition = [];
-                    this.state.saveState(); // Save to history
-                }
-            }
-        } else if (currentTool === TOOLS.RECTANGLE) {
-            if (!this.state.rectangleStart) {
-                // First click - set start corner
-                // If we have previous points, use the last one as start
-                if (this.state.points.length > 0) {
-                    this.state.rectangleStart = this.state.points[this.state.points.length - 1];
-                } else {
-                    this.state.rectangleStart = new Point(x, y, settings);
-                    this.state.points.push(this.state.rectangleStart);
-                }
-            } else {
-                // Second click - complete rectangle
-                const p1 = this.state.rectangleStart;
-                const p2 = new Point(x, y, settings);
-
-                // Calculate all 4 corners
-                const corners = calculateRectangle(p1, p2, settings);
-
-                // Add 4 lines to form rectangle
-                for (let i = 0; i < 4; i++) {
-                    const start = corners[i];
-                    const end = corners[(i + 1) % 4];
-                    this.state.trajectory.add_line(start, end, this.state.penUp);
-                }
-
-                // Add final corner to points
-                this.state.points.push(p2);
-
-                // Reset for next rectangle
-                this.state.rectangleStart = null;
-                this.state.saveState(); // Save to history
-            }
         } else if (currentTool === TOOLS.SEMICIRCLE) {
+            // Logic: Start Point (Click 1) -> End Point (Click 2)
             if (!this.state.semicircleStart) {
-                // First click - set center
-                // If we have previous points, use the last one as center
+                // If we have previous points, chain from last point
                 if (this.state.points.length > 0) {
                     this.state.semicircleStart = this.state.points[this.state.points.length - 1];
+                    // Proceed to second click immediately? No, wait for user to click End.
+                    // But if user JUST clicked, that was 'Line End'.
+                    // Now user selects Semicircle.
+                    // User clicks 'End' of semicircle.
+                    // So we treat the current click as END if we auto-chained.
+
+                    // Wait: If I select tool, I haven't clicked yet.
+                    // If I click now, is it Start or End?
+                    // User expectation: "Scegliere il punto di partenza".
+                    // If I want to chain, I click on the last point to confirm it?
+                    // Or does it auto-start? 
+                    // Let's require Explicit Start Click to be safe/flexible (allows detached semicircles).
+                    // BUT "Incollare tra di loro".
+                    // Compromise: If I click near the last point, it snaps?
+
+                    this.state.semicircleStart = currentPoint;
+                    this.state.points.push(currentPoint);
                 } else {
-                    this.state.semicircleStart = new Point(x, y, settings);
-                    this.state.points.push(this.state.semicircleStart);
+                    this.state.semicircleStart = currentPoint;
+                    this.state.points.push(currentPoint);
                 }
             } else {
-                // Second click - define radius and create semicircle
-                const center = this.state.semicircleStart;
-                const radiusPoint = new Point(x, y, settings);
+                // Second Click: End Point
+                const start = this.state.semicircleStart;
+                const end = currentPoint;
 
-                // Calculate radius in PIXEL coordinates
-                const dx = radiusPoint.relX - center.relX;
-                const dy = radiusPoint.relY - center.relY;
-                const radius = Math.sqrt(dx * dx + dy * dy);
+                // Calc properties for arc
+                const cx = (start.relX + end.relX) / 2;
+                const cy = (start.relY + end.relY) / 2;
+                const center = new Point(cx, cy, settings);
 
-                // Calculate start angle (from center to radius point)
-                const startAngle = Math.atan2(dy, dx);
-                const endAngle = startAngle + Math.PI; // 180 degrees = semicircle
+                const dx = end.relX - start.relX;
+                const dy = end.relY - start.relY;
+                const radius = Math.sqrt(dx * dx + dy * dy) / 2;
 
-                // Create start and end points for the arc
-                const startPoint = new Point(
-                    center.relX + radius * Math.cos(startAngle),
-                    center.relY + radius * Math.sin(startAngle),
-                    settings
-                );
+                const startAngle = Math.atan2(start.relY - cy, start.relX - cx);
+                const endAngle = Math.atan2(end.relY - cy, end.relX - cx);
 
-                const endPoint = new Point(
-                    center.relX + radius * Math.cos(endAngle),
-                    center.relY + radius * Math.sin(endAngle),
-                    settings
-                );
-
-                // Add semicircle as arc
+                // Add Arc
                 this.state.trajectory.add_circle(
                     center, radius, startAngle, endAngle,
-                    this.state.penUp, startPoint, endPoint
+                    this.state.penUp, start, end
                 );
 
-                this.state.points.push(endPoint);
+                this.state.points.push(end);
                 this.state.semicircleStart = null;
                 this.state.saveState();
             }
-        } else if (currentTool === TOOLS.FULLCIRCLE) {
-            if (!this.state.fullcircleStart) {
-                // First click - set center
-                // If we have previous points, use the last one as center
-                if (this.state.points.length > 0) {
-                    this.state.fullcircleStart = this.state.points[this.state.points.length - 1];
-                } else {
-                    this.state.fullcircleStart = new Point(x, y, settings);
-                    this.state.points.push(this.state.fullcircleStart);
+
+        } else if ([TOOLS.CIRCLE, TOOLS.SQUARE, TOOLS.POLYGON].includes(currentTool)) {
+            // Centered Shapes: Center (Click 1) -> Radius/Corner (Click 2)
+            if (!this.state.shapeStart) {
+                this.state.shapeStart = currentPoint;
+                this.state.points.push(currentPoint);
+
+                // If there was a previous point, this creates a jump (or line if pen down?)
+                // Usage: User clicks Center. Robot moves to Center.
+                // If chained (points > 1), we add a line P_prev -> Center.
+                if (this.state.points.length > 1) {
+                    const p_prev = this.state.points[this.state.points.length - 2];
+                    // We assume PenUp is desireable for moving to center of a new shape?
+                    // Or keep current pen state? Use true (Pen Up) for clean jump to center.
+                    this.state.trajectory.add_line(p_prev, currentPoint, true);
                 }
+
             } else {
-                // Second click - define radius and create full circle
-                const center = this.state.fullcircleStart;
-                const radiusPoint = new Point(x, y, settings);
+                // Second Click: Define Size/Rotation
+                const center = this.state.shapeStart;
+                const corner = currentPoint;
 
-                // Calculate radius in PIXEL coordinates
-                const dx = radiusPoint.relX - center.relX;
-                const dy = radiusPoint.relY - center.relY;
+                const dx = corner.relX - center.relX;
+                const dy = corner.relY - center.relY;
                 const radius = Math.sqrt(dx * dx + dy * dy);
+                const rotation = Math.atan2(dy, dx); // Angle to corner
 
-                // Calculate start angle (from center to radius point)
-                const startAngle = Math.atan2(dy, dx);
-                const endAngle = startAngle + 2 * Math.PI; // 360 degrees = full circle
+                if (currentTool === TOOLS.CIRCLE) {
+                    const startAngle = rotation;
+                    const endAngle = rotation + 2 * Math.PI;
 
-                // Create start point (same as end point for full circle)
-                const startPoint = new Point(
-                    center.relX + radius * Math.cos(startAngle),
-                    center.relY + radius * Math.sin(startAngle),
-                    settings
-                );
+                    const startP = new Point(
+                        center.relX + radius * Math.cos(startAngle),
+                        center.relY + radius * Math.sin(startAngle),
+                        settings
+                    );
 
-                // Add full circle
-                this.state.trajectory.add_circle(
-                    center, radius, startAngle, endAngle,
-                    this.state.penUp, startPoint, startPoint
-                );
+                    // Move Center -> StartP (Pen Up)
+                    this.state.trajectory.add_line(center, startP, true);
 
-                this.state.points.push(startPoint);
-                this.state.fullcircleStart = null;
+                    this.state.trajectory.add_circle(
+                        center, radius, startAngle, endAngle,
+                        this.state.penUp, startP, startP
+                    );
+
+                    this.state.points.push(startP);
+
+                } else {
+                    // SQUARE or POLYGON
+                    const sides = (currentTool === TOOLS.SQUARE) ? 4 : (this.state.polygonSides || 5);
+                    const polyPoints = calculatePolygon(center, radius, sides, rotation, settings);
+
+                    // Move Center -> Vertex 0
+                    this.state.trajectory.add_line(center, polyPoints[0], true);
+
+                    // Draw edges
+                    for (let i = 0; i < polyPoints.length; i++) {
+                        const p_start = polyPoints[i];
+                        const p_end = polyPoints[(i + 1) % polyPoints.length];
+                        this.state.trajectory.add_line(p_start, p_end, this.state.penUp);
+                    }
+
+                    // End at Start Vertex
+                    this.state.points.push(polyPoints[0]);
+                }
+
+                this.state.shapeStart = null;
                 this.state.saveState();
             }
         }
@@ -467,10 +450,14 @@ export class CanvasHandler {
             ctx.setLineDash([]);
         }
 
-        if (points.length === 0) return;
-        const lastP = points[points.length - 1];
+        if (points.length === 0 && !this.state.semicircleStart && !this.state.shapeStart) return;
 
-        if (this.state.tool === TOOLS.LINE) {
+        let lastP = null;
+        if (points.length > 0) lastP = points[points.length - 1];
+
+        const currentTool = this.state.tool;
+
+        if (currentTool === TOOLS.LINE && lastP) {
             ctx.beginPath();
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
             ctx.setLineDash([5, 5]);
@@ -480,127 +467,56 @@ export class CanvasHandler {
             ctx.stroke();
             ctx.setLineDash([]);
         }
-        else if (this.state.tool === TOOLS.CIRCLE) {
-            const m = new Point(mouseX, mouseY, settings);
-            const a = lastP;
+        else if (currentTool === TOOLS.SEMICIRCLE && this.state.semicircleStart) {
+            const start = this.state.semicircleStart;
+            // Preview Arc
+            const cx = (start.relX + mouseX) / 2;
+            const cy = (start.relY + mouseY) / 2;
+            const dx = mouseX - start.relX;
+            const dy = mouseY - start.relY;
+            const r = Math.sqrt(dx * dx + dy * dy) / 2;
+            const a1 = Math.atan2(start.relY - cy, start.relX - cx);
+            const a2 = Math.atan2(mouseY - cy, mouseX - cx);
 
-            if (this.state.circleDefinition.length === 0) {
-                // Defining Diameter
-                const c = a.add(m.sub(a).scale(0.5));
-                const r = m.sub(a).mag() / 2;
-
-                ctx.beginPath();
-                ctx.strokeStyle = 'rgba(0, 229, 255, 0.5)';
-                ctx.lineWidth = 1;
-                ctx.setLineDash([5, 5]);
-                ctx.arc(c.relX, c.relY, r, 0, 2 * Math.PI);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
-            else if (this.state.circleDefinition.length === 1) {
-                // Defining Arc End
-                const mockCircleDef = [this.state.circleDefinition[0], m];
-                const params = find_circ(points, mockCircleDef, settings);
-
-                // Draw the dashed arc
-                ctx.beginPath();
-                ctx.strokeStyle = 'rgba(0, 229, 255, 0.8)';
-                ctx.lineWidth = 2;
-                ctx.setLineDash([5, 5]);
-
-                const A = params.theta_0 > params.theta_1;
-                const B = Math.abs(params.theta_1 - params.theta_0) < Math.PI;
-                const ccw = (!A && !B) || (A && B);
-
-                ctx.arc(params.c.relX, params.c.relY, params.r, params.theta_0, params.theta_1, ccw);
-                ctx.stroke();
-                ctx.setLineDash([]);
-
-                // Phantom full circle
-                ctx.beginPath();
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-                ctx.lineWidth = 1;
-                ctx.arc(params.c.relX, params.c.relY, params.r, 0, 2 * Math.PI);
-                ctx.stroke();
-
-                // Radius Line Indicator (Center to Mouse)
-                ctx.beginPath();
-                ctx.moveTo(params.c.relX, params.c.relY);
-                ctx.lineTo(mouseX, mouseY);
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-                ctx.setLineDash([2, 2]);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255, 165, 0, 0.7)'; // Orange
+            ctx.setLineDash([5, 5]);
+            ctx.lineWidth = 2;
+            ctx.arc(cx, cy, r, a1, a2, false);
+            ctx.stroke();
+            ctx.setLineDash([]);
         }
-        else if (this.state.tool === TOOLS.RECTANGLE) {
-            if (this.state.rectangleStart) {
-                // Preview rectangle while dragging
-                const p1 = this.state.rectangleStart;
-                const corners = calculateRectangle(p1, new Point(mouseX, mouseY, settings), settings);
+        else if (this.state.shapeStart && [TOOLS.CIRCLE, TOOLS.SQUARE, TOOLS.POLYGON].includes(currentTool)) {
+            const center = this.state.shapeStart;
+            const dx = mouseX - center.relX;
+            const dy = mouseY - center.relY;
+            const r = Math.sqrt(dx * dx + dy * dy);
+            const rot = Math.atan2(dy, dx);
 
-                ctx.beginPath();
-                ctx.strokeStyle = 'rgba(0, 229, 255, 0.6)';
-                ctx.setLineDash([5, 5]);
-                ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(0, 255, 127, 0.7)'; // Green
+            ctx.setLineDash([5, 5]);
+            ctx.lineWidth = 2;
 
-                // Draw rectangle outline
-                ctx.moveTo(corners[0].relX, corners[0].relY);
-                for (let i = 1; i < corners.length; i++) {
-                    ctx.lineTo(corners[i].relX, corners[i].relY);
+            if (currentTool === TOOLS.CIRCLE) {
+                ctx.arc(center.relX, center.relY, r, 0, 2 * Math.PI);
+            } else {
+                const sides = (currentTool === TOOLS.SQUARE) ? 4 : (this.state.polygonSides || 5);
+                const pts = calculatePolygon(center, r, sides, rot, settings);
+                if (pts.length > 0) {
+                    ctx.moveTo(pts[0].relX, pts[0].relY);
+                    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].relX, pts[i].relY);
+                    ctx.closePath();
                 }
-                ctx.closePath();
-                ctx.stroke();
-                ctx.setLineDash([]);
             }
-        }
-        else if (this.state.tool === TOOLS.SEMICIRCLE) {
-            if (this.state.semicircleStart) {
-                // Preview semicircle while defining radius
-                const center = this.state.semicircleStart;
-                const dx = mouseX - center.relX;
-                const dy = mouseY - center.relY;
-                const radius = Math.sqrt(dx * dx + dy * dy);
-                const startAngle = Math.atan2(dy, dx);
-                const endAngle = startAngle + Math.PI;
+            ctx.stroke();
+            ctx.setLineDash([]);
 
-                ctx.beginPath();
-                ctx.strokeStyle = 'rgba(255, 165, 0, 0.7)'; // Orange for semicircle
-                ctx.setLineDash([5, 5]);
-                ctx.lineWidth = 2;
-                ctx.arc(center.relX, center.relY, radius, startAngle, endAngle, false);
-                ctx.stroke();
-                ctx.setLineDash([]);
-
-                // Draw center point
-                ctx.beginPath();
-                ctx.fillStyle = 'rgba(255, 165, 0, 0.5)';
-                ctx.arc(center.relX, center.relY, 3, 0, 2 * Math.PI);
-                ctx.fill();
-            }
-        }
-        else if (this.state.tool === TOOLS.FULLCIRCLE) {
-            if (this.state.fullcircleStart) {
-                // Preview full circle while defining radius
-                const center = this.state.fullcircleStart;
-                const dx = mouseX - center.relX;
-                const dy = mouseY - center.relY;
-                const radius = Math.sqrt(dx * dx + dy * dy);
-
-                ctx.beginPath();
-                ctx.strokeStyle = 'rgba(0, 255, 127, 0.7)'; // Green for full circle
-                ctx.setLineDash([5, 5]);
-                ctx.lineWidth = 2;
-                ctx.arc(center.relX, center.relY, radius, 0, 2 * Math.PI);
-                ctx.stroke();
-                ctx.setLineDash([]);
-
-                // Draw center point
-                ctx.beginPath();
-                ctx.fillStyle = 'rgba(0, 255, 127, 0.5)';
-                ctx.arc(center.relX, center.relY, 3, 0, 2 * Math.PI);
-                ctx.fill();
-            }
+            // Draw Center
+            ctx.beginPath();
+            ctx.fillStyle = 'rgba(0, 255, 127, 0.5)';
+            ctx.arc(center.relX, center.relY, 3, 0, 2 * Math.PI);
+            ctx.fill();
         }
     }
 
