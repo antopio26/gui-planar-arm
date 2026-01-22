@@ -34,18 +34,16 @@ function initUI() {
         btnSquare: document.getElementById('tool-square'),
         btnPolygon: document.getElementById('tool-polygon'),
         btnSemicircle: document.getElementById('tool-semicircle'),
-        btnPen: document.getElementById('penup-btn'),
 
         btnUndo: document.getElementById('undo-btn'),
         btnRedo: document.getElementById('redo-btn'),
         btnClear: document.getElementById('clear-btn'),
         btnGridToggle: document.getElementById('grid-toggle-btn'),
-        btnSnapToggle: document.getElementById('snap-toggle-btn'),
 
         btnSend: document.getElementById('send-trajectory-btn'),
         btnStop: document.getElementById('stop-trajectory-btn'),
         btnHoming: document.getElementById('homing-btn'),
-        btnDemo: document.getElementById('clean-state-btn'),
+        btnCleanState: document.getElementById('clean-state-btn'),
 
         // Text Tools
         btnModeLinear: document.getElementById('mode-linear-btn'),
@@ -66,9 +64,13 @@ function initUI() {
         inputWsW: document.getElementById('ws-w'),
         inputWsH: document.getElementById('ws-h'),
 
-        // Curved Inputs
+        // Curved Inputs (Text positioning)
         inputCurvRadius: document.getElementById('curv-radius'),
         inputCurvOffset: document.getElementById('curv-offset'),
+
+        // Curved Workspace Config
+        inputWsInnerR: document.getElementById('ws-inner-r'),
+        inputWsOuterR: document.getElementById('ws-outer-r'),
 
         warningMsg: document.getElementById('text-warning'),
         // Redundant buttons removed
@@ -79,6 +81,10 @@ function initUI() {
         btnAppModeText: document.getElementById('app-mode-text'),
         sectionDrawing: document.getElementById('section-drawing-tools'),
         sectionText: document.getElementById('section-text-tools'),
+
+        // Workspace Geometry Controls
+        linearWsControls: document.getElementById('linear-ws-controls'),
+        curvedWsControls: document.getElementById('curved-ws-controls'),
     };
 }
 
@@ -144,12 +150,6 @@ function setupEventListeners() {
         updateToolUI();
     });
 
-    ui.btnPen.addEventListener('click', () => {
-        state.penUp = !state.penUp;
-        ui.btnPen.classList.toggle('active', state.penUp);
-        ui.btnPen.textContent = state.penUp ? "✏️ Pen Up (Active)" : "✏️ Toggle Pen Up";
-    });
-
     // Undo/Redo/Clear - Unified
     ui.btnUndo.addEventListener('click', () => {
         state.undo();
@@ -175,11 +175,7 @@ function setupEventListeners() {
         ui.btnGridToggle.classList.toggle('active', state.showGrid);
     });
 
-    ui.btnSnapToggle.addEventListener('click', () => {
-        state.snapToGrid = !state.snapToGrid;
-        ui.btnSnapToggle.textContent = '🧲 Snap: ' + (state.snapToGrid ? 'ON' : 'OFF');
-        ui.btnSnapToggle.classList.toggle('active', state.snapToGrid);
-    });
+
 
     // Commands
     ui.btnHoming.addEventListener('click', () => {
@@ -190,8 +186,35 @@ function setupEventListeners() {
         API.sendData();
     });
 
-    ui.btnDemo.addEventListener('click', () => {
-        console.log("Demo trajectory requested");
+    ui.btnCleanState.addEventListener('click', () => {
+        console.log("Cleaning all state...");
+        // Reset drawing state
+        state.points = [];
+        state.sentPoints = [];
+        state.trajectory.reset();
+        state.sentTrajectory.reset();
+        state.shapeStart = null;
+        state.semicircleStart = null;
+        state.circleDefinition = [];
+
+        // Reset text state
+        state.text = '';
+        state.textPreview = [];
+        state.generatedTextPatches = [];
+        if (ui.inputText) ui.inputText.value = '';
+
+        // Reset manipulator traces
+        if (state.manipulator) state.manipulator.reset_trace();
+
+        // Clear history for clean slate
+        state.history = [];
+        state.historyIndex = -1;
+        state.saveState(); // Save the clean state
+
+        // Update UI
+        updateUndoRedoUI();
+        if (canvasHandler) canvasHandler.animate();
+        console.log("State cleaned.");
     });
 
     // Stop Trajectory
@@ -313,12 +336,21 @@ function setupEventListeners() {
 
     // Redundant text buttons removed
 
-    // Workspace Inputs
+    // Workspace Inputs (Linear)
     [ui.inputWsX, ui.inputWsY, ui.inputWsW, ui.inputWsH].forEach(el => {
         if (el) {
             el.addEventListener('input', () => {
                 updateWorkspaceState();
                 validateText();
+            });
+        }
+    });
+
+    // Workspace Inputs (Curved)
+    [ui.inputWsInnerR, ui.inputWsOuterR].forEach(el => {
+        if (el) {
+            el.addEventListener('input', () => {
+                updateWorkspaceState();
             });
         }
     });
@@ -360,6 +392,8 @@ function setAppMode(mode) {
     } else {
         ui.sectionDrawing.style.display = 'none';
         ui.sectionText.style.display = 'block';
+        // Regenerate text preview when switching to text mode
+        generatePreview();
     }
 }
 
@@ -392,13 +426,24 @@ function setTextMode(mode) {
     ui.btnModeLinear.classList.toggle('active', mode === 'linear');
     ui.btnModeCurved.classList.toggle('active', mode === 'curved');
 
-    // Update Controls Visibility
+    // Update Text Controls Visibility
     if (mode === 'linear') {
         ui.controlsLinear.classList.remove('hidden');
         ui.controlsCurved.classList.add('hidden');
     } else {
         ui.controlsLinear.classList.add('hidden');
         ui.controlsCurved.classList.remove('hidden');
+    }
+
+    // Update Workspace Geometry Controls Visibility
+    if (ui.linearWsControls && ui.curvedWsControls) {
+        if (mode === 'linear') {
+            ui.linearWsControls.classList.remove('hidden');
+            ui.curvedWsControls.classList.add('hidden');
+        } else {
+            ui.linearWsControls.classList.add('hidden');
+            ui.curvedWsControls.classList.remove('hidden');
+        }
     }
 
     // Regenerate preview with new mode parameters
@@ -476,18 +521,33 @@ function validateText() {
 }
 
 function updateWorkspaceState() {
-    // Parse inputs
-    const x = parseFloat(ui.inputWsX.value) || 0.01;
-    const y = parseFloat(ui.inputWsY.value) || -0.18;
-    const w = parseFloat(ui.inputWsW.value) || 0.27;
-    const h = parseFloat(ui.inputWsH.value) || 0.36;
+    // Parse Linear Workspace inputs
+    const x = parseFloat(ui.inputWsX?.value) || 0.01;
+    const y = parseFloat(ui.inputWsY?.value) || -0.18;
+    const w = parseFloat(ui.inputWsW?.value) || 0.27;
+    const h = parseFloat(ui.inputWsH?.value) || 0.36;
 
-    // Update State
+    // Update Linear Workspace State
     if (state.settings.linearWorkspace) {
         state.settings.linearWorkspace.x = x;
         state.settings.linearWorkspace.y = y;
         state.settings.linearWorkspace.w = w;
         state.settings.linearWorkspace.h = h;
+    }
+
+    // Parse Curved Workspace inputs
+    const innerR = parseFloat(ui.inputWsInnerR?.value) || 0.10;
+    const outerR = parseFloat(ui.inputWsOuterR?.value) || 0.30;
+
+    // Update Curved Workspace State
+    if (state.settings.curvedWorkspace) {
+        state.settings.curvedWorkspace.innerRadius = innerR;
+        state.settings.curvedWorkspace.outerRadius = outerR;
+    }
+
+    // Trigger Canvas Redraw for real-time feedback
+    if (typeof canvasHandler !== 'undefined' && canvasHandler) {
+        canvasHandler.animate();
     }
 }
 
@@ -622,7 +682,8 @@ function getTrajectoryPayload() {
             } else if (t.type === 'circle') {
                 try {
                     const c = t.data[0];
-                    const r = t.data[1];
+                    const rPixels = t.data[1];
+                    const r = rPixels * state.settings.m_p; // Convert pixels to meters
                     const theta0 = t.data[2];
                     const theta1 = t.data[3];
                     const penup = t.data[4];

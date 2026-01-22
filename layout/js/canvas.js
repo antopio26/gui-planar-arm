@@ -10,6 +10,8 @@ export class CanvasHandler {
 
         this.mouseX = 0;
         this.mouseY = 0;
+        this.hoveredPoint = null; // Track point near cursor for connection
+        this.snapRadius = 15; // Pixels distance for point snapping
 
         this.resize(); // Handle HiDPI scaling
         this.initEvents();
@@ -112,6 +114,26 @@ export class CanvasHandler {
         const rect = this.canvas.getBoundingClientRect();
         this.mouseX = e.clientX - rect.left;
         this.mouseY = e.clientY - rect.top;
+
+        // Update hovered point for connection feedback (Separated mode)
+        if (this.state.drawingMode === 'discrete' && this.state.appMode === 'drawing') {
+            this.hoveredPoint = this.findNearbyPoint(this.mouseX, this.mouseY);
+        } else {
+            this.hoveredPoint = null;
+        }
+    }
+
+    findNearbyPoint(x, y) {
+        const points = this.state.points;
+        for (let i = points.length - 1; i >= 0; i--) {
+            const p = points[i];
+            const dx = x - p.relX;
+            const dy = y - p.relY;
+            if (dx * dx + dy * dy < this.snapRadius * this.snapRadius) {
+                return p;
+            }
+        }
+        return null;
     }
 
     handleClick(e) {
@@ -160,20 +182,30 @@ export class CanvasHandler {
         if (currentTool === TOOLS.LINE) {
             if (mode === 'discrete') {
                 // Discrete Line: Start -> End (Independent Segments)
+                // Check if we should snap to an existing point
+                const nearbyPoint = this.findNearbyPoint(x, y);
+                const targetPoint = nearbyPoint ? nearbyPoint : currentPoint;
+
                 if (!this.state.shapeStart) {
                     // Click 1: Start Point
-                    // Jump from previous if exists
-                    if (this.state.points.length > 0) {
+                    // Jump from previous if exists and not snapping to it
+                    if (this.state.points.length > 0 && !nearbyPoint) {
                         const last = this.state.points[this.state.points.length - 1];
-                        this.state.trajectory.add_line(last, currentPoint, true);
+                        this.state.trajectory.add_line(last, targetPoint, true);
                     }
-                    this.state.shapeStart = currentPoint;
-                    this.state.points.push(currentPoint);
+                    this.state.shapeStart = targetPoint;
+                    // Only add point if not snapping to existing
+                    if (!nearbyPoint) {
+                        this.state.points.push(targetPoint);
+                    }
                 } else {
                     // Click 2: End Point
                     const start = this.state.shapeStart;
-                    this.state.trajectory.add_line(start, currentPoint, this.state.penUp);
-                    this.state.points.push(currentPoint);
+                    this.state.trajectory.add_line(start, targetPoint, false); // Connected = pen down
+                    // Only add point if not snapping to existing
+                    if (!nearbyPoint) {
+                        this.state.points.push(targetPoint);
+                    }
                     this.state.shapeStart = null;
                     this.state.saveState();
                 }
@@ -377,13 +409,14 @@ export class CanvasHandler {
             // "Mostra l'intera ciambella"
 
             ctx.beginPath();
-            // Inner radius limit (e.g. 0.15m)
-            const innerR_m = 0.15;
-            const outerR_m = 0.328; // max reach
+            // Inner/outer radius from state (dynamic)
+            const cws = this.state.settings.curvedWorkspace || { innerRadius: 0.10, outerRadius: 0.30 };
+            const innerR_m = cws.innerRadius;
+            const outerR_m = cws.outerRadius;
 
             const mp = this.state.settings.m_p;
             const innerR = innerR_m / mp;
-            const outerR = outerR_m / mp; // Should match 'radius'
+            const outerR = outerR_m / mp;
 
             // Right side sector (-90 to +90 degrees)
             ctx.arc(origin.x, origin.y, outerR, -Math.PI / 2, Math.PI / 2, false);
@@ -556,11 +589,16 @@ export class CanvasHandler {
                     const a1 = Math.atan2(start.relY - cy, start.relX - cx);
                     const a2 = Math.atan2(mouseY - cy, mouseX - cx);
 
+                    // Use same CCW logic as trajectory drawing
+                    const A = a1 > a2;
+                    const B = Math.abs(a2 - a1) < Math.PI;
+                    const ccw = (!A && !B) || (A && B);
+
                     ctx.beginPath();
                     ctx.strokeStyle = 'rgba(255, 165, 0, 0.7)'; // Orange
                     ctx.setLineDash([5, 5]);
                     ctx.lineWidth = 2;
-                    ctx.arc(cx, cy, r, a1, a2, false);
+                    ctx.arc(cx, cy, r, a1, a2, ccw);
                     ctx.stroke();
                     ctx.setLineDash([]);
                 }
@@ -634,10 +672,8 @@ export class CanvasHandler {
         // if (this.state.textPreview && this.state.textPreview.length > 0) { ... }
 
 
-        // Draw Anchors in United Mode
-        if (this.state.drawingMode === 'continuous') {
-            this.drawAnchors();
-        }
+        // Draw Anchors in both modes (but with different highlighting in Separated)
+        this.drawAnchors();
 
         // Draw Coordinates (always on top)
         this.drawCoordinates();
@@ -650,15 +686,28 @@ export class CanvasHandler {
         const points = this.state.points;
         const radius = 4;
 
-        ctx.fillStyle = '#00ffcc'; // Bright Cyan
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 1;
-
         for (let p of points) {
+            const isHovered = this.hoveredPoint === p;
+
             ctx.beginPath();
-            ctx.arc(p.relX, p.relY, radius, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.stroke();
+
+            if (isHovered) {
+                // Draw SQUARE for hoverable point (connection available)
+                ctx.fillStyle = '#ffaa00'; // Orange/Yellow
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                const size = radius * 2;
+                ctx.fillRect(p.relX - size / 2, p.relY - size / 2, size, size);
+                ctx.strokeRect(p.relX - size / 2, p.relY - size / 2, size, size);
+            } else {
+                // Draw CIRCLE for normal point
+                ctx.fillStyle = '#00ffcc'; // Bright Cyan
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1;
+                ctx.arc(p.relX, p.relY, radius, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.stroke();
+            }
         }
     }
 }

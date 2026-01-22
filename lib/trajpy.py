@@ -544,8 +544,15 @@ def slice_trj(patch: dict, **kargs):
     if patch['data']['penup']:
         # if penup -> use a point-to-point trajectory (in this case: cycloidal)
         # patch['points'] -> [[x0, y0], [x1, y1]]
-        qt0 = list(ik(patch['points'][0][0], patch['points'][0][1], 1, None, kargs['sizes']).T[0])
-        qt1 = list(ik(patch['points'][1][0], patch['points'][1][1], 1, None, kargs['sizes']).T[0])
+        ik0 = ik(patch['points'][0][0], patch['points'][0][1], 1, None, kargs['sizes'])
+        ik1 = ik(patch['points'][1][0], patch['points'][1][1], 1, None, kargs['sizes'])
+        
+        if ik0 is None or ik1 is None:
+            print(f"Warning: Penup trajectory has unreachable point(s). Start: {patch['points'][0]}, End: {patch['points'][1]}")
+            return [], [], [], []  # Return empty - skip this patch
+            
+        qt0 = list(ik0.T[0])
+        qt1 = list(ik1.T[0])
         (traj0, dt0) = cycloidal([qt0[0], qt1[0]], kargs['max_acc']*0.4, tf) # first motor
         (traj1, dt1) = cycloidal([qt0[1], qt1[1]], kargs['max_acc']*0.4, tf) # second motor
         for t in rangef(0, kargs['Tc'], tf):
@@ -569,7 +576,16 @@ def slice_trj(patch: dict, **kargs):
             ts.append(t)
 
     for p in points:
-        qt = list(ik(p.x, p.y, 0, None, kargs['sizes']).T[0]) # points converted to joint space
+        ik_result = ik(p.x, p.y, 0, None, kargs['sizes'])
+        if ik_result is None:
+            # Point unreachable - skip or use last known position
+            print(f"Warning: Point ({p.x:.3f}, {p.y:.3f}) unreachable by robot")
+            if q0s:
+                q0s.append(q0s[-1])
+                q1s.append(q1s[-1])
+                penups.append(1)  # Pen up for unreachable
+            continue
+        qt = list(ik_result.T[0])
         q0s.append(qt[0])
         q1s.append(qt[1])
         penups.append(0)

@@ -138,10 +138,10 @@ def sample_ellipse(center, radii, arc, steps=None):
     end_rad = math.radians(arc[1])
     
     # Adaptive resolution if steps not provided
-    # Aim for ~2 degrees per step for high smoothness (Ultra Quality)
+    # Aim for ~5 degrees per step for good performance (was 2 for ultra quality)
     if steps is None:
         span_deg = abs(arc[1] - arc[0])
-        steps = max(20, int(span_deg / 2)) # Every 2 degrees -> 180 points for a circle
+        steps = max(12, int(span_deg / 5)) # Every 5 degrees -> 72 points for a circle
     
     points = []
     

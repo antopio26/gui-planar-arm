@@ -76,6 +76,12 @@ def validate_trajectory(q, dq, ddq):
 def trace_trajectory(q:tuple[list,list]):
     q1 = q[0][:]
     q2 = q[1][:]
+    
+    # Guard against empty trajectories
+    if not q1 or not q2:
+        print("Warning: Empty trajectory, nothing to trace")
+        return
+        
     eel.js_draw_traces([q1, q2])
     eel.js_draw_pose([q1[-1], q2[-1]])
 
@@ -96,6 +102,13 @@ def py_log(msg):
 def py_get_data():
     try:
         data: list = eel.js_get_data()()
+        
+        # DEBUG: Show incoming data from frontend
+        print(f"DEBUG py_get_data: Received {len(data)} patches")
+        if data and len(data) > 0:
+            p = data[0]
+            print(f"DEBUG py_get_data: patch[0] = type:{p.get('type')}, points:{p.get('points')}")
+        
         if len(data) < 1: 
             raise Exception("Not Enough Points to build a Trajectory")
             
@@ -195,12 +208,15 @@ def py_homing_cmd():
         # Simulated Homing
         print("Homing: SIMULATION MODE")
         
-        # Get start position
-        q_start = state.last_known_q
+        # Get start position from FIRMWARE (actual visual position)
+        # Not last_known_q which might be stale
+        q_start = [state.firmware.q0, state.firmware.q1]
         q_end = [0.0, 0.0]
         
-        # If already at 0, do nothing
-        if abs(q_start[0]) < 0.001 and abs(q_start[1]) < 0.001:
+        print(f"Homing from {q_start} to {q_end}")
+        
+        # If already at home, do nothing
+        if abs(q_start[0]) < 0.01 and abs(q_start[1]) < 0.01:
             print("Already at home.")
             return
 
@@ -239,6 +255,11 @@ def py_homing_cmd():
         q = (q0s, q1s, penups)
         dq = (dq0s, dq1s)
         ddq = (ddq0s, ddq1s) # We don't really use this in sim, but consisteny
+        
+        # DEBUG: Log trajectory endpoints
+        print(f"Homing Trajectory: {len(q0s)} points")
+        print(f"  Start: q0={q0s[0]:.4f}, q1={q1s[0]:.4f}")
+        print(f"  End:   q0={q0s[-1]:.4f}, q1={q1s[-1]:.4f}")
         
         # Send to manager
         serial_manager.send_data('trj', q=q, dq=dq, ddq=ddq)
@@ -369,6 +390,11 @@ def py_generate_text(text, options):
         # We pass start_pos=(0,0) and handle placement via transform
         patches = char_gen.text_to_traj(text, (0,0), font_size, char_spacing=font_size*0.2)
         
+        # DEBUG: Show raw patches
+        if patches:
+            p0 = patches[0]['points'][0]
+            print(f"DEBUG: Raw text patch[0] point[0]: ({p0[0]:.4f}, {p0[1]:.4f})")
+        
         # 2. Apply Transform
         final_patches = []
         
@@ -391,6 +417,8 @@ def py_generate_text(text, options):
                 radius = float(options.get('radius', 0.2))
                 offset = float(options.get('offset', 90))
                 
+                print(f"DEBUG: Curved mode - radius={radius}, offset={offset}")
+                
                 # Removed strict range validation - frontend handles geometry validation
                 # Just ensure radius is positive
                 if radius <= 0:
@@ -398,6 +426,12 @@ def py_generate_text(text, options):
                     return []
                     
                 final_patches = _apply_curved_transform(patches, radius, offset)
+                
+                # DEBUG: Show transformed patches
+                if final_patches:
+                    tp0 = final_patches[0]['points'][0]
+                    print(f"DEBUG: Transformed patch[0] point[0]: ({tp0[0]:.4f}, {tp0[1]:.4f})")
+                    
             except (ValueError, TypeError) as e:
                 print(f"Invalid curved parameters: {e}")
                 return []

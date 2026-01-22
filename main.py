@@ -1,3 +1,4 @@
+from openpyxl.drawing.geometry import PresetGeometry2D
 from gevent import monkey
 monkey.patch_all()
 
@@ -43,3 +44,4 @@ if __name__ == "__main__":
         pass
     finally:
         handle_closure(None, None)
+

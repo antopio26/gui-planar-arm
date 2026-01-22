@@ -21,10 +21,14 @@ class StateManager {
 
             // Workspace Config
             'linearWorkspace': {
-                'x': 0.01,
-                'y': -0.18,
-                'w': 0.27,
-                'h': 0.36
+                'x': 0.05,
+                'y': -0.15,
+                'w': 0.20,
+                'h': 0.30
+            },
+            'curvedWorkspace': {
+                'innerRadius': 0.12,
+                'outerRadius': 0.33
             }
         };
 
@@ -76,7 +80,7 @@ class StateManager {
         this.settings.origin.y = canvasHeight / 2;
         this.settings.m_p = (0.328 * 2) / canvasWidth;
 
-        this.manipulator = new Manipulator([-Math.PI / 2, -Math.PI / 2], this.settings);
+        this.manipulator = new Manipulator([0, 0], this.settings); // Home position: arm along +X axis
         this.trajectory = new Trajectory();
         this.sentTrajectory = new Trajectory();
     }
