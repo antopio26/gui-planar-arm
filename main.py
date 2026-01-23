@@ -22,9 +22,10 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, handle_closure)
 
     # Initialize Serial (Try to connect)
-    SETTINGS['ser_started'] = scm.ser_init(SERIAL_PORT)
-    if not SETTINGS['ser_started']:
-        print("No serial could be found, continuing anyway for GUI debug.")
+    # SETTINGS['ser_started'] = scm.ser_init(SERIAL_PORT)
+    # if not SETTINGS['ser_started']:
+    #     print("No serial could be found, continuing anyway for GUI debug.")
+    print("Main: Waiting for Serial connection via GUI...")
 
     # Start Serial Monitor
     serial_manager.start_monitor()

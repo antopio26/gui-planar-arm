@@ -4,6 +4,18 @@ import serial.tools.list_ports
 
 ser = None # serial object
 
+def list_serial_ports() -> list[dict]:
+    """Returns a list of available serial ports."""
+    ports = serial.tools.list_ports.comports()
+    result = []
+    for port in ports:
+        result.append({
+            'device': port.device,
+            'description': port.description
+        })
+    return result
+
+
 def ser_init(serial_path:str) -> bool:
     global ser 
     print("Starting Serial Connection:\n")

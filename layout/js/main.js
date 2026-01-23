@@ -20,6 +20,8 @@ const ui = {
     statusDot: document.getElementById('status-dot'),
     statusText: document.getElementById('status-text'),
     btnConnect: document.getElementById('start-serial-btn'),
+    selectPort: document.getElementById('serial-port-list'),
+    btnRefresh: document.getElementById('refresh-ports-btn'),
 
     btnLine: document.getElementById('line-btn'),
     btnCircle: document.getElementById('circle-btn'),
@@ -65,10 +67,40 @@ const ui = {
 // --- Event Listeners ---
 
 // Connection
+// Connection
+async function populateSerialPorts() {
+    const ports = await API.listSerialPorts();
+    const select = ui.selectPort;
+
+    // Save current selection if possible
+    const currentVal = select.value;
+
+    // Clear except OFFLINE
+    select.innerHTML = '<option value="OFFLINE">Offline Mode</option>';
+
+    ports.forEach(port => {
+        const option = document.createElement('option');
+        option.value = port.device;
+        option.textContent = `${port.device} (${port.description})`;
+        select.appendChild(option);
+    });
+
+    if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
+        select.value = currentVal;
+    }
+}
+
+ui.btnRefresh.addEventListener('click', populateSerialPorts);
+
 ui.btnConnect.addEventListener('click', async () => {
-    await API.startSerial();
+    const selectedPort = ui.selectPort.value;
+    console.log("Connecting to:", selectedPort);
+    await API.startSerial(selectedPort);
     updateSerialStatus();
 });
+
+// Initial Population
+populateSerialPorts();
 
 // Tools
 ui.btnLine.addEventListener('click', () => {

@@ -6,9 +6,14 @@ export const API = {
         return await window.eel.py_serial_online()();
     },
 
-    async startSerial() {
+    async listSerialPorts() {
+        if (!window.eel) return [];
+        return await window.eel.py_list_ports()();
+    },
+
+    async startSerial(portName) {
         if (!window.eel) return;
-        await window.eel.py_serial_startup()();
+        await window.eel.py_serial_startup(portName)();
     },
 
     async homing() {

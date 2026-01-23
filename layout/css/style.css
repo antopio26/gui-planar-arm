@@ -171,14 +171,40 @@ canvas {
 }
 
 /* Input Styles */
+input,
+select,
+textarea {
+    font-family: inherit;
+    outline: none;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    border-radius: var(--border-radius-md);
+}
+
 .input-full {
     width: 100%;
     padding: var(--spacing-sm);
     border: 1px solid var(--bg-tertiary);
     background: var(--bg-primary);
     color: var(--text-primary);
-    border-radius: var(--border-radius-sm);
-    margin-bottom: var(--spacing-sm);
+    border-radius: var(--border-radius-md);
+}
+
+.input-full:focus,
+.input-row input:focus,
+select:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px var(--accent-dim);
+}
+
+select {
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 16px;
+    padding-right: 30px;
+    /* Space for arrow */
+    cursor: pointer;
 }
 
 .input-row {
@@ -191,7 +217,8 @@ canvas {
 
 .input-row input {
     width: 60px;
-    padding: 2px 5px;
+    padding: 4px 8px;
+    /* Slightly larger padding */
     background: var(--bg-primary);
     border: 1px solid var(--bg-tertiary);
     color: var(--text-primary);

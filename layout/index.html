@@ -39,6 +39,12 @@
                     <div id="status-dot" class="status-dot"></div>
                     <span id="status-text">Disconnected</span>
                 </div>
+                <div class="row-control" style="display: flex; gap: 5px;">
+                    <select id="serial-port-list" class="input-full" style="flex-grow: 1;">
+                        <option value="OFFLINE">Offline Mode</option>
+                    </select>
+                    <button id="refresh-ports-btn" class="btn sm" style="width: auto;">↻</button>
+                </div>
                 <button id="start-serial-btn" class="btn">Connect Serial</button>
             </div>
 
@@ -113,7 +119,8 @@
             <div class="control-group">
                 <div class="group-title">Commands</div>
                 <button id="send-data-btn" class="btn primary">Send Trajectory</button>
-                <button id="stop-traj-btn" class="btn" style="background-color: #e74c3c; color: white;">Arresta Traiettoria</button>
+                <button id="stop-traj-btn" class="btn" style="background-color: #e74c3c; color: white;">Arresta
+                    Traiettoria</button>
                 <div style="height: 5px;"></div>
                 <button id="homing-btn" class="btn">Homing</button>
                 <button id="repeatable-btn" class="btn">Demo Trajectory</button>

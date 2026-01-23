@@ -244,10 +244,23 @@ def py_serial_online():
     return SETTINGS['ser_started']
 
 @eel.expose
-def py_serial_startup():
-    print(f"Calling scm.ser_init({SERIAL_PORT})...")
-    SETTINGS['ser_started'] = scm.ser_init(SERIAL_PORT)
+def py_list_ports():
+    return scm.list_serial_ports()
+
+@eel.expose
+def py_serial_startup(port_name=None):
+    print(f"Calling scm.ser_init({port_name})...")
+    
+    if port_name == "OFFLINE":
+        print("Switching to OFFLINE mode.")
+        if SETTINGS['ser_started']:
+            scm.serial_close()
+        SETTINGS['ser_started'] = False
+        return False
+        
+    SETTINGS['ser_started'] = scm.ser_init(port_name)
     print(f"Serial Started? {SETTINGS['ser_started']}")
+    return SETTINGS['ser_started']
 
 @eel.expose
 def py_clear_state():
