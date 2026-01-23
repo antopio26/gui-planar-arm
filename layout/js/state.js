@@ -74,6 +74,17 @@ class StateManager {
         this.sentTrajectory.data = [...this.trajectory.data];
         this.resetDrawing();
     }
+
+    update() {
+        // Update all solitary points
+        this.points.forEach(p => p.updateRelative());
+        this.sentPoints.forEach(p => p.updateRelative());
+        this.circleDefinition.forEach(p => p.updateRelative());
+
+        // Update full trajectories
+        this.trajectory.update();
+        this.sentTrajectory.update();
+    }
 }
 
 export const appState = new StateManager();

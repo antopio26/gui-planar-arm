@@ -25,6 +25,14 @@ export class Manipulator {
         return this.q_coords;
     }
 
+    // Update internal state (e.g. after resize)
+    update() {
+        // Recalculate p and end_eff using current settings (which have new m_p/origin)
+        const [p1, p2] = this.dk(this.q_coords);
+        this.p = p1;
+        this.end_eff = p2;
+    }
+
     // --- Trace Management ---
 
     add2trace(q) {

@@ -21,6 +21,37 @@ export class Trajectory {
         this.data = [];
     }
 
+    update() {
+        for (let traj of this.data) {
+            if (traj.type === 'line') {
+                // p0, p1
+                traj.data[0].updateRelative();
+                traj.data[1].updateRelative();
+            } else if (traj.type === 'circle') {
+                // data: [c, r, theta_0, theta_1, raised, a, p]
+                const c = traj.data[0];
+                const a = traj.data[5];
+                const p = traj.data[6];
+
+                c.updateRelative();
+                a.updateRelative();
+                p.updateRelative();
+
+                // Recalc Radius (pixels)
+                // r = distance(c, a)
+                traj.data[1] = c.sub(a).mag();
+
+                // Recalc Angles
+                // Vector C->A = c.sub(a). Angle of A relative to C is angle(a-c) = angle(-(c-a)) = angle(c-a) + PI
+                const v1 = c.sub(a);
+                const v2 = c.sub(p);
+
+                traj.data[2] = v1.angle() + Math.PI; // theta_0
+                traj.data[3] = v2.angle() + Math.PI; // theta_1
+            }
+        }
+    }
+
     draw(ctx) {
         for (let traj of this.data) {
             const raised = (traj.type === 'line') ? traj.data[2] : traj.data[4];

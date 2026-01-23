@@ -52,7 +52,10 @@ const ui = {
     btnSend: document.getElementById('send-data-btn'),
     btnStop: document.getElementById('stop-traj-btn'),
     btnHoming: document.getElementById('homing-btn'),
-    btnDemo: document.getElementById('repeatable-btn'),
+    btnStop: document.getElementById('stop-traj-btn'),
+    btnHoming: document.getElementById('homing-btn'),
+    // btnDemo removed
+
 
     // Text Tools
     btnModeLinear: document.getElementById('mode-linear-btn'),
@@ -91,6 +94,16 @@ ui.btnMainDrawing.addEventListener('click', () => setMajorMode('drawing'));
 ui.btnMainText.addEventListener('click', () => setMajorMode('text'));
 
 function setMajorMode(mode) {
+    if (state.majorMode === mode) return;
+
+    // Clear Canvas & State on Mode Switch
+    state.resetDrawing();
+    state.sentPoints = [];
+    state.sentTrajectory.reset();
+    state.textPreview = [];
+    state.generatedTextPatches = [];
+    // Optionally stop backend if needed? API.stopTrajectory();
+
     state.majorMode = mode;
     // Update Buttons
     ui.btnMainDrawing.classList.toggle('active', mode === 'drawing');
@@ -193,11 +206,8 @@ ui.btnSend.addEventListener('click', () => {
     // Sending is triggered via Python callback -> js_get_data
 });
 
-ui.btnDemo.addEventListener('click', () => {
-    // Implement demo/repeatable trajectory logic if needed
-    // ...
-    console.log("Demo trajectory requested");
-});
+// Demo button removed
+
 
 // Stop Trajectory
 ui.btnStop.addEventListener('click', async () => {

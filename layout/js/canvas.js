@@ -58,7 +58,16 @@ export class CanvasHandler {
 
         // Store visual radius for drawing
         this.workspaceRadius = radius;
+
+        // Force Manipulator Re-calc
+        if (this.state.manipulator) {
+            this.state.manipulator.update();
+        }
+
+        // Force Trajectory Re-calc (Points & Curves)
+        this.state.update();
     }
+
 
     handleMouseMove(e) {
         const rect = this.canvas.getBoundingClientRect();
@@ -271,12 +280,6 @@ export class CanvasHandler {
         // Only show GREEN Workspace Hints if in Text Mode
         if (this.state.majorMode === 'text') {
             // Always draw "Sheet" (Green Rectangle) regardless of mode (Linear/Curved)
-
-            // Draw Full Reachable (Faint)
-            ctx.beginPath();
-            ctx.arc(origin.x, origin.y, radius, 0, 2 * Math.PI);
-            ctx.strokeStyle = '#333';
-            ctx.stroke();
 
             // Green Rect (The Sheet)
             ctx.fillStyle = 'rgba(0, 200, 81, 0.3)'; // Green transparent
