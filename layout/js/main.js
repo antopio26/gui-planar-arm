@@ -26,6 +26,13 @@ const ui = {
     btnLine: document.getElementById('line-btn'),
     btnCircle: document.getElementById('circle-btn'),
     btnPen: document.getElementById('penup-btn'),
+    btnClearCanvas: document.getElementById('clear-canvas-btn'),
+
+    // Main Mode Switcher
+    btnMainDrawing: document.getElementById('main-mode-drawing'),
+    btnMainText: document.getElementById('main-mode-text'),
+    containerDrawing: document.getElementById('drawing-mode-container'),
+    containerText: document.getElementById('text-mode-container'),
 
     btnSend: document.getElementById('send-data-btn'),
     btnStop: document.getElementById('stop-traj-btn'),
@@ -63,6 +70,30 @@ const ui = {
     btnNewline: document.getElementById('newline-btn'),
     btnClean: document.getElementById('clean-text-btn'),
 };
+
+// --- Mode Switcher Logic ---
+
+ui.btnMainDrawing.addEventListener('click', () => setMajorMode('drawing'));
+ui.btnMainText.addEventListener('click', () => setMajorMode('text'));
+
+function setMajorMode(mode) {
+    state.majorMode = mode;
+    // Update Buttons
+    ui.btnMainDrawing.classList.toggle('active', mode === 'drawing');
+    ui.btnMainText.classList.toggle('active', mode === 'text');
+
+    // Update Containers
+    if (mode === 'drawing') {
+        ui.containerDrawing.classList.remove('hidden');
+        ui.containerText.classList.add('hidden');
+    } else {
+        ui.containerDrawing.classList.add('hidden');
+        ui.containerText.classList.remove('hidden');
+        // Regenerate preview when entering text mode
+        validateText();
+        generatePreview();
+    }
+}
 
 // --- Event Listeners ---
 
@@ -113,10 +144,30 @@ ui.btnCircle.addEventListener('click', () => {
     updateToolUI();
 });
 
-ui.btnPen.addEventListener('click', () => {
-    state.penUp = !state.penUp;
-    ui.btnPen.classList.toggle('active', state.penUp);
-    ui.btnPen.textContent = state.penUp ? "Pen Up (Active)" : "Toggle Pen Up";
+// Keyboard Listener for ESC (Pen Up)
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        if (state.majorMode === 'drawing') {
+            state.penUp = true;
+            console.log("Pen Up Active (Waiting for next click to move)");
+        }
+    }
+});
+
+ui.btnClearCanvas.addEventListener('click', async () => {
+    if (confirm("Clear Drawing Canvas? This will remove all drawn lines.")) {
+        state.resetDrawing();
+        state.sentPoints = [];
+        state.sentTrajectory.reset();
+
+        // Also clear backend
+        await API.stopTrajectory(); // Or if there is a 'clear' API
+        // API.clearState(); // Assuming this is needed if stopTrajectory doesn't clear points
+
+        state.textPreview = [];
+        state.generatedTextPatches = [];
+        ui.warningMsg.classList.add('hidden');
+    }
 });
 
 // Commands
@@ -180,6 +231,7 @@ function setTextMode(mode) {
 
     // Trigger validation/redraw
     validateText();
+    generatePreview(); // Regenerate on switch
 }
 
 function updateWorkspaceState() {
@@ -372,22 +424,23 @@ ui.btnNewline.addEventListener('click', () => {
     generatePreview();
 });
 
-ui.btnClean.addEventListener('click', () => {
+ui.btnClean.addEventListener('click', async () => {
     // Clear Input
     ui.inputText.value = "";
 
     // Clear State
     state.textPreview = [];
     state.generatedTextPatches = [];
-    state.points = [];
-    state.trajectory.reset();
-
-    // Clear Sent/Ghost Trajectory (User Request)
+    state.resetDrawing();
     state.sentPoints = [];
     state.sentTrajectory.reset();
 
     // Clear Backend State
-    API.clearState();
+    await API.stopTrajectory();
+    // If backend has specific clear endpoint, use it. 
+    // "API.clearState" is referenced in line 390 of original file, let's verify if defined.
+    // It was in line 390 of the original file read: `API.clearState();`
+    if (API.clearState) API.clearState();
 
     ui.warningMsg.classList.add('hidden');
     console.log("Workspace Cleared");

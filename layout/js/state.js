@@ -37,6 +37,9 @@ class StateManager {
         this.manipulator = null;
         this.trajectory = null;
         this.sentTrajectory = null;
+
+        // Mode State
+        this.majorMode = 'drawing'; // 'drawing' | 'text'
     }
 
     init(canvasWidth, canvasHeight) {

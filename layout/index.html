@@ -30,7 +30,7 @@
                         d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
                     </path>
                 </svg>
-                RoboControl
+                DumARM
             </div>
 
             <div class="control-group">
@@ -49,71 +49,87 @@
             </div>
 
             <div class="control-group">
-                <div class="group-title">Drawing Tools</div>
-                <button id="line-btn" class="btn active" data-tool="line">Line Tool</button>
-                <button id="circle-btn" class="btn" data-tool="circle">Circle Tool</button>
-                <button id="penup-btn" class="btn">Toggle Pen Up</button>
+                <div class="group-title">Mode</div>
+                <div class="toggle-row">
+                    <button id="main-mode-drawing" class="btn active">Drawing</button>
+                    <button id="main-mode-text" class="btn">Text</button>
+                </div>
             </div>
 
-            <div class="control-group">
-                <div class="group-title">Text Tools</div>
+            <div id="drawing-mode-container">
+                <div class="control-group">
+                    <div class="group-title">Drawing Tools</div>
+                    <button id="line-btn" class="btn active" data-tool="line">Line Tool</button>
+                    <button id="circle-btn" class="btn" data-tool="circle">Circle Tool</button>
+                    <div style="height: 5px;"></div>
+                    <button id="clear-canvas-btn" class="btn"
+                        style="border-color: var(--danger-color); color: var(--danger-color);">Clear Canvas</button>
+                </div>
+            </div>
 
-                <div class="toggle-row">
-                    <button id="mode-linear-btn" class="btn active sm">Linear</button>
-                    <button id="mode-curved-btn" class="btn sm">Curved</button>
+            <div id="text-mode-container" class="hidden">
+                <div class="control-group">
+                    <div class="group-title">Workspace Configuration</div>
+                    <div class="toggle-row">
+                        <button id="mode-linear-btn" class="btn active sm">Linear</button>
+                        <button id="mode-curved-btn" class="btn sm">Curved</button>
+                    </div>
+
+                    <!-- Linear Controls -->
+                    <div id="linear-controls">
+                        <div class="input-row">
+                            <label>Sheet X:</label><input type="number" id="ws-x" value="0.01" step="0.01">
+                        </div>
+                        <div class="input-row">
+                            <label>Sheet Y:</label><input type="number" id="ws-y" value="-0.18" step="0.01">
+                        </div>
+                        <div class="input-row">
+                            <label>Width:</label><input type="number" id="ws-w" value="0.27" step="0.01">
+                        </div>
+                        <div class="input-row">
+                            <label>Height:</label><input type="number" id="ws-h" value="0.36" step="0.01">
+                        </div>
+                        <!-- Linear Text Position -->
+                        <div class="group-title" style="margin-top: 10px;">Text Position</div>
+                        <div class="input-row">
+                            <label>Position X:</label> <input type="number" id="lin-x" value="0.22" step="0.01">
+                        </div>
+                        <div class="input-row">
+                            <label>Position Y:</label> <input type="number" id="lin-y" value="0.17" step="0.01">
+                        </div>
+                        <div class="input-row">
+                            <label>Angle:</label> <input type="number" id="lin-angle" value="-90" step="5">
+                        </div>
+                    </div>
+
+                    <!-- Curved Controls -->
+                    <div id="curved-controls" class="hidden">
+                        <div class="input-row">
+                            <label>Radius:</label> <input type="number" id="curv-radius" value="0.25" step="0.01">
+                        </div>
+                        <div class="input-row">
+                            <label>Offset:</label> <input type="number" id="curv-offset" value="90" step="5">
+                        </div>
+                    </div>
                 </div>
 
-                <textarea id="text-input" placeholder="Enter text..." class="input-full" rows="1"></textarea>
+                <div class="control-group">
+                    <div class="group-title">Text Input</div>
+                    <textarea id="text-input" placeholder="Enter text..." class="input-full" rows="1"></textarea>
 
-                <div class="input-row">
-                    <label>Size:</label>
-                    <input type="number" id="font-size" value="0.05" step="0.005" class="input-sm">
-                </div>
-
-                <!-- Linear Controls -->
-                <div id="linear-controls">
-                    <div class="input-row">
-                        <label>Position X:</label> <input type="number" id="lin-x" value="0.22" step="0.01">
-                    </div>
-                    <div class="input-row">
-                        <label>Position Y:</label> <input type="number" id="lin-y" value="0.17" step="0.01">
-                    </div>
-                    <div class="input-row">
-                        <label>Angle:</label> <input type="number" id="lin-angle" value="-90" step="5">
+                    <div class="input-row" style="margin-top: 5px;">
+                        <label>Size:</label>
+                        <input type="number" id="font-size" value="0.05" step="0.005" class="input-sm">
                     </div>
 
-                    <div class="input-row">
-                        <label>Sheet X:</label><input type="number" id="ws-x" value="0.01" step="0.01">
-                    </div>
-                    <div class="input-row">
-                        <label>Sheet Y:</label><input type="number" id="ws-y" value="-0.18" step="0.01">
-                    </div>
-                    <div class="input-row">
-                        <label>Width:</label><input type="number" id="ws-w" value="0.27" step="0.01">
-                    </div>
-                    <div class="input-row">
-                        <label>Height:</label><input type="number" id="ws-h" value="0.36" step="0.01">
+                    <div id="text-warning" class="warning-msg hidden">⚠ Text exceeds workspace!</div>
+
+                    <div class="toggle-row">
+                        <button id="generate-text-btn" class="btn primary sm">Generate</button>
+                        <button id="newline-btn" class="btn sm">New Line ↵</button>
+                        <button id="clean-text-btn" class="btn sm">Clean Text</button>
                     </div>
                 </div>
-
-                <!-- Curved Controls -->
-                <div id="curved-controls" class="hidden">
-                    <div class="input-row">
-                        <label>Radius:</label> <input type="number" id="curv-radius" value="0.25" step="0.01">
-                    </div>
-                    <div class="input-row">
-                        <label>Offset:</label> <input type="number" id="curv-offset" value="90" step="5">
-                    </div>
-                </div>
-
-                <div id="text-warning" class="warning-msg hidden">⚠ Text exceeds workspace!</div>
-
-                <div class="toggle-row">
-                    <button id="generate-text-btn" class="btn primary sm">Generate Text</button>
-                    <button id="newline-btn" class="btn sm">New Line ↵</button>
-                    <button id="clean-text-btn" class="btn sm">Clean Text</button>
-                </div>
-                <div style="height: 10px;"></div>
             </div>
 
             <div class="control-group">

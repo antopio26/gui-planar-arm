@@ -28,9 +28,25 @@ export class Trajectory {
             // Skip raised (pen up) segments for visualization if desired, 
             // or draw them dashed
             if (raised) {
-                // Optional: Draw dashed line for pen up? 
-                // Currently skipping as per original logic
-                continue;
+                // Pen Up: Draw Dashed Line
+                ctx.beginPath();
+                ctx.lineWidth = 2; // Slightly thinner?
+                ctx.strokeStyle = 'rgba(255, 165, 0, 0.7)'; // Orange, semi-transparent
+                ctx.setLineDash([5, 5]);
+
+                if (traj.type === 'line') {
+                    const p0 = traj.data[0];
+                    const p1 = traj.data[1];
+                    ctx.moveTo(p0.relX, p0.relY);
+                    ctx.lineTo(p1.relX, p1.relY);
+                }
+                // (Circle pen-up is rare/unusual but could happen? Usually pen down for arc)
+                // If needed, can add here.
+
+                ctx.stroke();
+                ctx.closePath();
+                ctx.setLineDash([]); // Reset
+                continue; // Done drawing this segment
             }
 
             ctx.beginPath();
