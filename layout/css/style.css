@@ -60,7 +60,13 @@ body {
     text-transform: uppercase;
     color: var(--text-muted);
     letter-spacing: 1px;
-    margin-bottom: var(--spacing-xs);
+    margin-top: var(--spacing-xs);
+}
+
+#text-mode-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
 }
 
 /* Main Content (Canvas) */
@@ -188,6 +194,7 @@ textarea {
     background: var(--bg-primary);
     color: var(--text-primary);
     border-radius: var(--border-radius-md);
+    resize: vertical;
 }
 
 .input-full:focus,
@@ -212,8 +219,9 @@ select {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-xs);
-    font-size: 0.9rem;
+    opacity: 85%;
+    font-size: 0.85rem;
+    padding-left: 4px;
 }
 
 .input-row input {
@@ -268,4 +276,30 @@ input::-webkit-inner-spin-button {
 /* Firefox */
 input[type=number] {
     -moz-appearance: textfield;
+}
+
+/* --- Input Grouping & Mini Labels --- */
+.input-group-container {
+    background-color: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--border-radius-md);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.mini-input-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.input-label-sm {
+    color: #888;
+    font-size: 0.8rem;
+    font-weight: 600;
+    user-select: none;
+    min-width: 12px;
+    text-align: center;
 }

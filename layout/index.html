@@ -85,81 +85,91 @@
                 <div class="control-group">
                     <div class="group-title">Sheet Definition</div>
                     <!-- Sheet Position Row -->
-                    <div class="input-row">
-                        <label>Origin (X,Y):</label>
-                        <div style="display: flex; gap: 5px;">
-                            <input type="number" id="ws-x" value="0.01" step="0.01" placeholder="X">
-                            <input type="number" id="ws-y" value="-0.18" step="0.01" placeholder="Y">
+                    <div class="input-group-container">
+                        <!-- Sheet Origin -->
+                        <div class="input-row">
+                            <label>Origin</label>
+                            <div class="mini-input-group">
+                                <span class="input-label-sm">X</span>
+                                <input type="number" id="ws-x" value="0.01" step="0.01">
+                                <span class="input-label-sm">Y</span>
+                                <input type="number" id="ws-y" value="-0.18" step="0.01">
+                            </div>
                         </div>
-                    </div>
-                    <!-- Sheet Dimensions Row -->
-                    <div class="input-row">
-                        <label>Size (W,H):</label>
-                        <div style="display: flex; gap: 5px;">
-                            <input type="number" id="ws-w" value="0.27" step="0.01" placeholder="W">
-                            <input type="number" id="ws-h" value="0.36" step="0.01" placeholder="H">
+                        <!-- Sheet Size -->
+                        <div class="input-row">
+                            <label>Size</label>
+                            <div class="mini-input-group">
+                                <span class="input-label-sm">W</span>
+                                <input type="number" id="ws-w" value="0.27" step="0.01">
+                                <span class="input-label-sm">H</span>
+                                <input type="number" id="ws-h" value="0.36" step="0.01">
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <div class="control-group">
                     <div class="group-title">Text Content</div>
-                    <textarea id="text-input" placeholder="Enter text..." class="input-full" rows="1"></textarea>
+                    <textarea id="text-input" placeholder="Enter text..." class="input-full" rows="3"></textarea>
 
-                    <div class="input-row" style="margin-top: 5px;">
-                        <label>Font Size:</label>
-                        <input type="number" id="font-size" value="0.05" step="0.005" class="input-sm">
+                    <div class="input-group-container">
+                        <div class="input-row">
+                            <label>Font Size</label>
+                            <input type="number" id="font-size" value="0.05" step="0.005" class="input-sm">
+                        </div>
                     </div>
-
                     <div id="text-warning" class="warning-msg hidden">⚠ Text exceeds workspace!</div>
                 </div>
 
                 <div class="control-group">
                     <div class="group-title">Writing Mode</div>
                     <div class="toggle-row">
-                        <button id="mode-linear-btn" class="btn active sm">Linear</button>
-                        <button id="mode-curved-btn" class="btn sm">Curved</button>
+                        <button id="mode-linear-btn" class="btn active">Linear</button>
+                        <button id="mode-curved-btn" class="btn">Curved</button>
                     </div>
 
                     <!-- Linear Controls -->
                     <div id="linear-controls">
-                        <div class="input-row">
-                            <label>Position (X,Y):</label>
-                            <div style="display: flex; gap: 5px;">
-                                <input type="number" id="lin-x" value="0.22" step="0.01" placeholder="X">
-                                <input type="number" id="lin-y" value="0.17" step="0.01" placeholder="Y">
+                        <div class="input-group-container">
+                            <div class="input-row">
+                                <label>Position</label>
+                                <div class="mini-input-group">
+                                    <span class="input-label-sm">X</span>
+                                    <input type="number" id="lin-x" value="0.22" step="0.01">
+                                    <span class="input-label-sm">Y</span>
+                                    <input type="number" id="lin-y" value="0.17" step="0.01">
+                                </div>
                             </div>
-                        </div>
-                        <div class="input-row">
-                            <label>Angle:</label>
-                            <input type="number" id="lin-angle" value="-90" step="5">
+                            <div class="input-row">
+                                <label>Angle</label>
+                                <input type="number" id="lin-angle" value="-90" step="5">
+                            </div>
                         </div>
                     </div>
 
                     <!-- Curved Controls -->
                     <div id="curved-controls" class="hidden">
                         <div class="input-row">
-                            <label>Radius:</label> <input type="number" id="curv-radius" value="0.25" step="0.01">
+                            <label>Radius</label> <input type="number" id="curv-radius" value="0.25" step="0.01">
                         </div>
                         <div class="input-row">
-                            <label>Offset:</label> <input type="number" id="curv-offset" value="90" step="5">
+                            <label>Offset</label> <input type="number" id="curv-offset" value="90" step="5">
                         </div>
                     </div>
 
                     <div style="margin-top: 10px;">
-                        <button id="clean-text-btn" class="btn sm" style="width: 100%;">Clean Text</button>
+                        <button id="clean-text-btn" class="btn" style="width: 100%;">Clean Text</button>
                     </div>
                 </div>
             </div>
 
             <div class="control-group">
                 <div class="group-title">Commands</div>
-                <button id="send-data-btn" class="btn primary">Send Trajectory</button>
-                <button id="stop-traj-btn" class="btn" style="background-color: #e74c3c; color: white;">Arresta
-                    Traiettoria</button>
-                <div style="height: 5px;"></div>
                 <button id="homing-btn" class="btn">Homing</button>
-                <button id="repeatable-btn" class="btn">Demo Trajectory</button>
+                <div style="height: 5px;"></div>
+                <button id="send-data-btn" class="btn primary">Send Trajectory</button>
+                <button id="stop-traj-btn" class="btn" style="background-color: #e74c3c; color: white;">STOP</button>
             </div>
 
             <div id="console-output" style="margin-top: auto; font-size: 0.8em; color: var(--text-muted);">
