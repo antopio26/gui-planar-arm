@@ -283,12 +283,6 @@ export class CanvasHandler {
                 // "Linear Workspace: ... Green rectangle"
                 // I will follow the Sketch (Green).
 
-                // Draw Full Reachable (Faint)
-                ctx.beginPath();
-                ctx.arc(origin.x, origin.y, radius, 0, 2 * Math.PI);
-                ctx.strokeStyle = '#333';
-                ctx.stroke();
-
                 // Draw "Safe Rect"
                 // Let's position it based on inputs or fixed?
                 // Fixed size "Sheet" at (0.15, -0.1) to (0.35, 0.1)?

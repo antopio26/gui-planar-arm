@@ -170,19 +170,18 @@ document.addEventListener('keydown', (e) => {
 });
 
 ui.btnClearCanvas.addEventListener('click', async () => {
-    if (confirm("Clear Drawing Canvas? This will remove all drawn lines.")) {
-        state.resetDrawing();
-        state.sentPoints = [];
-        state.sentTrajectory.reset();
+    // Immediate clear without confirmation
+    state.resetDrawing();
+    state.sentPoints = [];
+    state.sentTrajectory.reset();
 
-        // Also clear backend
-        await API.stopTrajectory(); // Or if there is a 'clear' API
-        // API.clearState(); // Assuming this is needed if stopTrajectory doesn't clear points
+    // Also clear backend
+    await API.stopTrajectory();
+    // API.clearState(); // Assuming this is needed if stopTrajectory doesn't clear points
 
-        state.textPreview = [];
-        state.generatedTextPatches = [];
-        ui.warningMsg.classList.add('hidden');
-    }
+    state.textPreview = [];
+    state.generatedTextPatches = [];
+    ui.warningMsg.classList.add('hidden');
 });
 
 // Commands

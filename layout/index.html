@@ -59,8 +59,22 @@
             <div id="drawing-mode-container">
                 <div class="control-group">
                     <div class="group-title">Drawing Tools</div>
-                    <button id="line-btn" class="btn active" data-tool="line">Line Tool</button>
-                    <button id="circle-btn" class="btn" data-tool="circle">Circle Tool</button>
+                    <button id="line-btn" class="btn active" data-tool="line"
+                        style="display: flex; align-items: center; gap: 8px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="4" y1="20" x2="20" y2="4"></line>
+                        </svg>
+                        Line Tool
+                    </button>
+                    <button id="circle-btn" class="btn" data-tool="circle"
+                        style="display: flex; align-items: center; gap: 8px;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 18a15 15 0 0 1 15-15"></path>
+                        </svg>
+                        Arch Tool
+                    </button>
                     <div style="height: 5px;"></div>
                     <button id="clear-canvas-btn" class="btn"
                         style="border-color: var(--danger-color); color: var(--danger-color);">Clear Canvas</button>

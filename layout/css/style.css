@@ -95,6 +95,7 @@ canvas {
     align-items: center;
     justify-content: center;
     gap: var(--spacing-sm);
+    flex: 1;
 }
 
 .btn:hover {
