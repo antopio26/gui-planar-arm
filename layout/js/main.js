@@ -77,12 +77,11 @@ const ui = {
     inputCurvRadius: document.getElementById('curv-radius'),
     inputCurvOffset: document.getElementById('curv-offset'),
 
-    inputCurvRadius: document.getElementById('curv-radius'),
-    inputCurvOffset: document.getElementById('curv-offset'),
+
 
     warningMsg: document.getElementById('text-warning'),
-    btnGenerate: document.getElementById('generate-text-btn'),
-    btnNewline: document.getElementById('newline-btn'),
+    // btnGenerate: document.getElementById('generate-text-btn'), // Removed
+    // btnNewline: document.getElementById('newline-btn'), // Removed
     btnClean: document.getElementById('clean-text-btn'),
 };
 
@@ -279,38 +278,9 @@ function updateWorkspaceState() {
 updateWorkspaceState();
 
 // Real-time Text Visualization
-ui.inputText.addEventListener('input', () => {
-    if (ui.inputText.value.length > 0) {
-        ui.btnGenerate.click();
-    } else {
-        state.textPreview = [];
-        state.generatedTextPatches = [];
-        validateText();
-    }
-});
+// Redundant listener removed. merged with debounced listener below.
 
-ui.btnGenerate.addEventListener('click', async () => {
-    const text = ui.inputText.value;
-    if (!text) return;
-
-    const options = getTextOptions();
-    console.log("Generating with:", options);
-
-    const patches = await API.generateText(text, options);
-    state.generatedTextPatches = patches; // Store for valid sending?
-
-    // We want to visualize this.
-    // The patches are {type, points:[], data:{penup}}
-    // Let's treat them as a preview in canvas
-    // OR add them to state.points/trajectory?
-    // "Clicca Generate Text per visualizzare il percorso sulla canvas."
-    // So distinct from sending?
-    // "Clicca Send Trajectory per avviare il robot."
-
-    // We'll store them in appState.textPreview for Canvas to draw
-    state.textPreview = patches;
-
-});
+// Generate button listener removed.
 
 async function validateText() {
     const text = ui.inputText.value;
@@ -426,17 +396,8 @@ ui.inputText.addEventListener('input', () => {
 });
 
 // Generate Button (Immediate)
-ui.btnGenerate.addEventListener('click', () => {
-    clearTimeout(debounceTimer);
-    generatePreview();
-});
-
-// New Line Button
-ui.btnNewline.addEventListener('click', () => {
-    ui.inputText.value += "\n";
-    ui.inputText.focus(); // Keep focus
-    generatePreview();
-});
+// Generate and Newline buttons removed in UI redesign.
+// Text generation remains reactive (input event).
 
 ui.btnClean.addEventListener('click', async () => {
     // Clear Input

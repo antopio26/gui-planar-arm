@@ -19,7 +19,7 @@ body {
 /* Layout */
 .app-container {
     display: grid;
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 330px 1fr;
     height: 100%;
     width: 100%;
 }
@@ -217,7 +217,7 @@ select {
 }
 
 .input-row input {
-    width: 60px;
+    width: 55px;
     padding: 4px 8px;
     /* Slightly larger padding */
     background: var(--bg-primary);
@@ -256,4 +256,16 @@ select {
     border-radius: var(--border-radius-sm);
     background: rgba(255, 68, 68, 0.1);
     text-align: center;
+}
+
+/* Chrome, Safari, Edge, Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Firefox */
+input[type=number] {
+    -moz-appearance: textfield;
 }
