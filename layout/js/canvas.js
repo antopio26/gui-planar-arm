@@ -166,22 +166,97 @@ export class CanvasHandler {
         const radius = this.workspaceRadius || (height / 2);
         // origin already defined above
 
-        // 1. Always Draw Reachable Workspace (Faint Circles)
-        ctx.beginPath();
-        const innerR_m_limit = 0.15;
-        const outerR_m_limit = 0.328;
-        const mp_limit = this.state.settings.m_p;
+        // 1. Draw Accurate Reachable Workspace
+        // 1. Draw Accurate Reachable Workspace (Robust Visualization)
+        const limits = this.state.settings.limits;
+        const mp = this.state.settings.m_p;
+        const l1 = this.state.settings.l1;
+        const l2 = this.state.settings.l2;
 
-        ctx.arc(origin.x, origin.y, outerR_m_limit / mp_limit, 0, 2 * Math.PI);
-        ctx.strokeStyle = '#333';
-        ctx.stroke();
+        if (limits) {
+            // A. Sweep Fill (Robust to folds/singularities)
+            const sweepSteps = 60;
+            const q1_step = (limits.q1_max - limits.q1_min) / sweepSteps;
 
-        ctx.beginPath();
-        ctx.arc(origin.x, origin.y, innerR_m_limit / mp_limit, 0, 2 * Math.PI);
-        ctx.strokeStyle = '#333'; // Inner limit
-        ctx.setLineDash([5, 5]);
-        ctx.stroke();
-        ctx.setLineDash([]);
+            ctx.strokeStyle = 'rgba(80, 80, 80, 0.15)';
+            ctx.lineWidth = 4;
+
+            for (let i = 0; i <= sweepSteps; i++) {
+                const q1 = limits.q1_min + i * q1_step;
+
+                // Elbow position in Canvas Frame
+                const ex = origin.x + (l1 * Math.cos(q1)) / mp;
+                const ey = origin.y - (l1 * Math.sin(q1)) / mp;
+
+                // Radius in pixels
+                const r_pix = l2 / mp;
+
+                // Draw arc for q2 range
+                // Note: Canvas angles are inverted relative to world if Y is flipped?
+                // World: Y up. Canvas: Y down.
+                // Angle theta in world -> -theta in canvas.
+                // Start Angle: -(q1 + q2_min)
+                // End Angle: -(q1 + q2_max)
+                // However, arc method takes start/end.
+
+                const a1 = -(q1 + limits.q2_min);
+                const a2 = -(q1 + limits.q2_max);
+
+                ctx.beginPath();
+                // Ensure counterclockwise is correct for the fill direction
+                ctx.arc(ex, ey, r_pix, a1, a2, true);
+                ctx.stroke();
+            }
+
+            // B. Draw Wireframe Boundaries
+            ctx.lineWidth = 1;
+
+            const drawCurve = (start, end, func, color, setDash = []) => {
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.setLineDash(setDash);
+                const segs = 50;
+                for (let i = 0; i <= segs; i++) {
+                    const t = start + (end - start) * (i / segs);
+                    const p = func(t);
+                    if (i === 0) ctx.moveTo(p.x, p.y);
+                    else ctx.lineTo(p.x, p.y);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
+            };
+
+            // 1. q2 limits (Inner/Outer Curves) - Blueish
+            drawCurve(limits.q1_min, limits.q1_max, (t) => this.getFK(t, limits.q2_min), '#00bcd4');
+            drawCurve(limits.q1_min, limits.q1_max, (t) => this.getFK(t, limits.q2_max), '#00bcd4');
+
+            // 2. q1 limits (Radial Sides) - Reddish
+            drawCurve(limits.q2_min, limits.q2_max, (t) => this.getFK(limits.q1_min, t), '#ff5252');
+            drawCurve(limits.q2_min, limits.q2_max, (t) => this.getFK(limits.q1_max, t), '#ff5252');
+
+            // 3. Max Reach Singularity (q2 = 0)
+            if (limits.q2_min <= 0 && limits.q2_max >= 0) {
+                drawCurve(limits.q1_min, limits.q1_max, (t) => this.getFK(t, 0), '#777', [5, 5]);
+            }
+
+        } else {
+            // Fallback
+            ctx.beginPath();
+            const innerR_m_limit = 0.15;
+            const outerR_m_limit = 0.328;
+            const mp_limit = this.state.settings.m_p;
+
+            ctx.arc(origin.x, origin.y, outerR_m_limit / mp_limit, 0, 2 * Math.PI);
+            ctx.strokeStyle = '#333';
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(origin.x, origin.y, innerR_m_limit / mp_limit, 0, 2 * Math.PI);
+            ctx.strokeStyle = '#333';
+            ctx.setLineDash([5, 5]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
 
         // Axis Lines
         ctx.beginPath();
@@ -443,5 +518,23 @@ export class CanvasHandler {
         this.drawToolPreview();
 
         requestAnimationFrame(() => this.animate());
+    }
+
+    // Helper for Workspace Visualization
+    getFK(q1, q2) {
+        const l1 = this.state.settings.l1;
+        const l2 = this.state.settings.l2;
+        const origin = this.state.settings.origin;
+        const mp = this.state.settings.m_p;
+
+        const x = l1 * Math.cos(q1) + l2 * Math.cos(q1 + q2);
+        const y = l1 * Math.sin(q1) + l2 * Math.sin(q1 + q2);
+
+        // Convert key points to Canvas Coords
+        // Canvas Y is DOWN, World Y is UP.
+        return {
+            x: origin.x + x / mp,
+            y: origin.y - y / mp
+        };
     }
 }

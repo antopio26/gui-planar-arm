@@ -21,7 +21,16 @@ class StateManager {
                 'x': 0.01,
                 'y': -0.18,
                 'w': 0.27,
+                'w': 0.27,
                 'h': 0.36
+            },
+
+            // Joint Limits (Radians) - Matching config.py
+            'limits': {
+                'q1_min': -1.57,
+                'q1_max': 1.57,
+                'q2_min': -2.5,
+                'q2_max': 2.5
             }
         };
 

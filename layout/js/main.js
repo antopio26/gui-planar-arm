@@ -11,6 +11,21 @@ const state = appState;
 // Initialize State
 state.init(canvas.width, canvas.height);
 
+// Fetch Config from Backend and Update State
+API.getConfig().then(config => {
+    if (config) {
+        console.log("Config loaded from backend:", config);
+        if (config.sizes) {
+            state.settings.l1 = config.sizes.l1;
+            state.settings.l2 = config.sizes.l2;
+        }
+        if (config.limits) {
+            state.settings.limits = config.limits;
+        }
+        // Force redraw if needed, or it will happen on next animate frame
+    }
+});
+
 // Initialize Canvas Handler
 const canvasHandler = new CanvasHandler(canvas, state);
 

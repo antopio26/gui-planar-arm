@@ -280,6 +280,18 @@ def py_clear_state():
         
     return True
 
+@eel.expose
+def py_get_config():
+    # Return relevant config to frontend
+    # config contains callables (lambdas), so we pick what we need
+    from config import JOINT_LIMITS 
+    
+    return {
+        'sizes': SIZES,
+        'limits': JOINT_LIMITS,
+        'max_acc': SETTINGS['max_acc']
+    }
+
 
 def _apply_linear_transform(patches, x_offset, y_offset, angle_deg):
     angle_rad = math.radians(angle_deg)

@@ -51,6 +51,11 @@ export const API = {
         return await window.eel.py_stop_trajectory()();
     },
 
+    async getConfig() {
+        if (!window.eel) return null;
+        return await window.eel.py_get_config()();
+    },
+
     // Setup callbacks that Python calls
     initCallbacks(callbacks) {
         if (!window.eel) {
