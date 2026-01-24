@@ -120,6 +120,10 @@ def py_get_data(settings_override=None):
         sizes, limits = resolve_config(settings_override)
         print(f"Using Config: Sizes={sizes}, Limits={limits}")
 
+        # Use current robot position as starting seed for continuity
+        # state.last_known_q is [q1, q2]
+        current_joint_pos = state.last_known_q 
+        
         for patch in data: 
             (q0s_p, q1s_p, penups_p, ts_p) = tpy.slice_trj(
                 patch, 
@@ -128,13 +132,18 @@ def py_get_data(settings_override=None):
                 line=SETTINGS['line_tl'],
                 circle=SETTINGS['circle_tl'],
                 sizes=sizes,
-                limits=limits
+                limits=limits,
+                initial_q=current_joint_pos
             )
             # Stitching logic
             q0s += q0s_p if len(q0s) == 0 else q0s_p[1:] 
             q1s += q1s_p if len(q1s) == 0 else q1s_p[1:]
             penups += penups_p if len(penups) == 0 else penups_p[1:]
             ts += [(t + ts[-1] if len(ts) > 0  else t) for t in (ts_p if len(ts) == 0 else ts_p[1:])]
+            
+            # Update seed for next patch
+            if len(q0s_p) > 0:
+                current_joint_pos = [q0s_p[-1], q1s_p[-1]]
 
         q = (q0s, q1s, penups)
         dq = (tpy.find_velocities(q[0], ts), tpy.find_velocities(q[1], ts))

@@ -317,71 +317,87 @@ def compose_cycloidal(q:list[float], ddqm:float = 1.05) -> list[tuple[list[funct
 @outputs: 
 - ndarray: column numpy array containing the values of the joint coordinates.
 @# """
-def ik(x:float, y:float, z:float = 0, theta:float = None, sizes:dict[float] = {'l1':0.170 ,'l2':0.158}, limits:dict[float] = None) -> np.ndarray:
+def ik(x:float, y:float, z:float = 0, theta:float = None, sizes:dict[float] = {'l1':0.170 ,'l2':0.158}, limits:dict[float] = None, seed_q:np.ndarray = None) -> np.ndarray:
     if x**2+y**2 > (sizes['l1']+sizes['l2'])**2: return None
-    q1 = 0
-    q2 = 0
+    
     a1 = sizes['l1']
     a2 = sizes['l2']
+    
+    solutions = []
 
-
+    # 1. Calculate Standard Solution
+    q1_std = 0
+    q2_std = 0
+    valid_std = True
+    
     if theta is not None:
         cos_q2 = (x**2+y**2-sizes['l1']**2-sizes['l2']**2)/(2*sizes['l1']*sizes['l2'])
-        # Check domain for acos/sqrt
-        if abs(cos_q2) > 1.0001: return None # Unreachable
-        if cos_q2 > 1.0: cos_q2 = 1.0
-        if cos_q2 < -1.0: cos_q2 = -1.0
-        
-        sin_q2 = sqrt(1-cos_q2**2)
-        # Check elbow up/down configuration?
-        # Standard solution typically picks one. 
-        # Existing code: q2 = atan2(sin_q2, cos_q2) => Positive q2 (Elbow Down in some conventions)
-        q2 = atan2(sin_q2, cos_q2)
-        q1 = theta-q2
-    else:
-        # Cosine Rule
-        cos_q2 = (x**2+y**2-a1**2-a2**2)/(2*a1*a2)
-        if abs(cos_q2) > 1.0001: return None 
-        if cos_q2 > 1.0: cos_q2 = 1.0
-        if cos_q2 < -1.0: cos_q2 = -1.0
-        
-        q2 = acos(cos_q2)
-        # There are two solutions for q2: +/- acos(...)
-        # Standard: +q2
-        
-        q1 = atan2(y,x)-atan2(a2*sin(q2), a1+a2*cos(q2))
-
-    
-    # Check Limits if provided
-    # Check Limits if provided
-    if limits:
-        # Check standard solution
-        valid_standard = (limits['q1_min'] <= q1 <= limits['q1_max']) and \
-                         (limits['q2_min'] <= q2 <= limits['q2_max'])
-        
-        if valid_standard:
-            pass # q/q1/q2 are good
+        if abs(cos_q2) > 1.0001: valid_std = False
         else:
-            # Try Alternative Solution (Flip Elbow)
-            # q2_neg = -q2
-            # Recalculate q1 for q2_neg
-            
-            q2_neg = -q2
-            q1_neg = atan2(y,x)-atan2(a2*sin(q2_neg), a1+a2*cos(q2_neg))
-            
-            valid_alt = (limits['q1_min'] <= q1_neg <= limits['q1_max']) and \
-                        (limits['q2_min'] <= q2_neg <= limits['q2_max'])
-            
-            if valid_alt:
-                q1 = q1_neg
-                q2 = q2_neg
-            else:
-                # Neither solution works
-                return None
+            if cos_q2 > 1.0: cos_q2 = 1.0
+            if cos_q2 < -1.0: cos_q2 = -1.0
+            sin_q2 = sqrt(1-cos_q2**2)
+            q2_std = atan2(sin_q2, cos_q2)
+            q1_std = theta-q2_std
+    else:
+        cos_q2 = (x**2+y**2-a1**2-a2**2)/(2*a1*a2)
+        if abs(cos_q2) > 1.0001: valid_std = False
+        else:
+            if cos_q2 > 1.0: cos_q2 = 1.0
+            if cos_q2 < -1.0: cos_q2 = -1.0
+            q2_std = acos(cos_q2)
+            q1_std = atan2(y,x)-atan2(a2*sin(q2_std), a1+a2*cos(q2_std))
 
+    if valid_std:
+        solutions.append((q1_std, q2_std))
+        
+    # 2. Calculate Alternative Solution (flipped q2)
+    # q2_alt = -q2_std
+    if valid_std and abs(q2_std) > 1e-6: # Avoid duplicate if q2 is 0
+        q2_alt = -q2_std
+        q1_alt = 0
+        
+        if theta is not None:
+             q1_alt = theta - q2_alt
+        else:
+             q1_alt = atan2(y,x)-atan2(a2*sin(q2_alt), a1+a2*cos(q2_alt))
+             
+        solutions.append((q1_alt, q2_alt))
 
-    q = np.array([[q1,q2,z]]).T
-    return q
+    # 3. Filter by Limits
+    valid_solutions = []
+    if limits:
+        for (q1, q2) in solutions:
+            if (limits['q1_min'] <= q1 <= limits['q1_max']) and (limits['q2_min'] <= q2 <= limits['q2_max']):
+                valid_solutions.append((q1, q2))
+    else:
+        valid_solutions = solutions
+
+    if not valid_solutions:
+        return None
+
+    # 4. Select Best Solution using seed_q
+    if seed_q is not None:
+        best_sol = None
+        min_dist = float('inf')
+        
+        # seed_q is np.ndarray [[q1], [q2], [z]]
+        curr_q1 = seed_q[0,0]
+        curr_q2 = seed_q[1,0]
+        
+        for (q1, q2) in valid_solutions:
+            # Simple euclidean distance in joint space
+            dist = (q1 - curr_q1)**2 + (q2 - curr_q2)**2
+            if dist < min_dist:
+                min_dist = dist
+                best_sol = (q1, q2)
+        
+        if best_sol:
+            return np.array([[best_sol[0], best_sol[1], z]]).T
+            
+    # Default: return first valid
+    sol = valid_solutions[0]
+    return np.array([[sol[0], sol[1], z]]).T
 
 """ #@
 @name: dk
@@ -562,6 +578,12 @@ def slice_trj(patch: dict, **kargs):
         print('Using default sizes')
     limits = kargs.get('limits', None)
     
+    # Initialize seed from previous configuration if available
+    q_prev = kargs.get('initial_q', None)
+    # Ensure q_prev is numpy array if it exists (it comes as list [q1, q2] usually)
+    if q_prev is not None and not isinstance(q_prev, np.ndarray):
+        q_prev = np.array([q_prev + [0]]).T # [q1, q2] -> [[q1],[q2],[0]]
+    
     q0s = []
     q1s = []
     penups = []
@@ -591,8 +613,17 @@ def slice_trj(patch: dict, **kargs):
         # if penup -> use a point-to-point trajectory (in this case: cycloidal)
         # patch['points'] -> [[x0, y0], [x1, y1]]
         k_sz = kargs['sizes']
-        qt0 = list(ik(patch['points'][0][0], patch['points'][0][1], 1, None, k_sz, limits).T[0])
-        qt1 = list(ik(patch['points'][1][0], patch['points'][1][1], 1, None, k_sz, limits).T[0])
+        
+        # Calculate Start Joint Config (Continuous with previous)
+        res0 = ik(patch['points'][0][0], patch['points'][0][1], 1, None, k_sz, limits, seed_q=q_prev)
+        if res0 is None: raise Exception(f"IK Failed for Start Point {patch['points'][0]}")
+        qt0 = list(res0.T[0])
+        
+        # Calculate End Joint Config (Continuous with Start)
+        res1 = ik(patch['points'][1][0], patch['points'][1][1], 1, None, k_sz, limits, seed_q=res0)
+        if res1 is None: raise Exception(f"IK Failed for End Point {patch['points'][1]}")
+        qt1 = list(res1.T[0])
+        
         (traj0, dt0) = cycloidal([qt0[0], qt1[0]], kargs['max_acc']*0.4, tf) # first motor
         (traj1, dt1) = cycloidal([qt0[1], qt1[1]], kargs['max_acc']*0.4, tf) # second motor
         for t in rangef(0, kargs['Tc'], tf):
@@ -616,12 +647,15 @@ def slice_trj(patch: dict, **kargs):
             ts.append(t)
 
     for p in points:
-        res = ik(p.x, p.y, 0, None, kargs['sizes'], limits)
+        res = ik(p.x, p.y, 0, None, kargs['sizes'], limits, seed_q=q_prev)
         if res is None: raise Exception(f"IK Failed for point {p}")
         qt = list(res.T[0]) # points converted to joint space
         q0s.append(qt[0])
         q1s.append(qt[1])
         penups.append(0)
+        
+        # Update seed for next point
+        q_prev = res
 
     return q0s, q1s, penups, ts
 
