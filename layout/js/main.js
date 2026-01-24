@@ -557,6 +557,9 @@ API.initCallbacks({
             if (ui.monQ1) ui.monQ1.value = q[0].toFixed(2);
             if (ui.monQ2) ui.monQ2.value = q[1].toFixed(2);
 
+            // Update Joint Space Trace
+            if (jointVisualizer) jointVisualizer.addTrace(q[0], q[1]);
+
             // Calculate End Effector Position (relative to origin, not pixels)
             // state.manipulator.end_eff gives pixels.
             // We want real world coords.

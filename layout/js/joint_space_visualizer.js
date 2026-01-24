@@ -2,9 +2,12 @@ export class JointSpaceVisualizer {
     constructor(canvas, state) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
+        this.ctx.lineJoin = 'round';
+        this.ctx.lineCap = 'round';
         this.state = state;
 
-        this.trajectoryData = null; // { q1: [], q2: [] }
+        this.trajectoryData = null; // { q1: [], q2: [] } (Planned)
+        this.traceData = { q1: [], q2: [] }; // (Executed/Real-time)
 
         this.resize();
         window.addEventListener('resize', () => this.resize());
@@ -14,9 +17,6 @@ export class JointSpaceVisualizer {
 
     resize() {
         const parent = this.canvas.parentElement;
-        // If parent is hidden (display:none), these might be 0.
-        // But we handle that in animate or by checking visibility.
-        // For now, assume it might be resized when visible.
         const width = parent.clientWidth || 700;
         const height = parent.clientHeight || 700;
 
@@ -30,7 +30,6 @@ export class JointSpaceVisualizer {
         this.canvas.style.width = size + 'px';
         this.canvas.style.height = size + 'px';
 
-        // Padding for axes
         this.padding = 60;
         this.graphWidth = size - this.padding * 2;
         this.graphHeight = size - this.padding * 2;
@@ -40,16 +39,31 @@ export class JointSpaceVisualizer {
         this.trajectoryData = { q1: q1s, q2: q2s };
     }
 
+    addTrace(q1, q2) {
+        this.traceData.q1.push(q1);
+        this.traceData.q2.push(q2);
+        // Limit trace size to avoid performance issues
+        if (this.traceData.q1.length > 5000) {
+            this.traceData.q1.shift();
+            this.traceData.q2.shift();
+        }
+    }
+
+    clearTrace() {
+        this.traceData = { q1: [], q2: [] };
+    }
+
     // Coordinate Transform: Joint Space -> Canvas Pixels
     toCanvas(q1, q2, limits) {
-        // Map q1 [min, max] -> x [padding, padding + width]
-        // Map q2 [min, max] -> y [padding + height, padding] (Y inverted)
-
         const q1Range = limits.q1_max - limits.q1_min;
         const q2Range = limits.q2_max - limits.q2_min;
 
-        const x = this.padding + ((q1 - limits.q1_min) / q1Range) * this.graphWidth;
-        const y = (this.padding + this.graphHeight) - ((q2 - limits.q2_min) / q2Range) * this.graphHeight;
+        // Clamp for safety
+        const q1c = Math.max(limits.q1_min, Math.min(limits.q1_max, q1));
+        const q2c = Math.max(limits.q2_min, Math.min(limits.q2_max, q2));
+
+        const x = this.padding + ((q1c - limits.q1_min) / q1Range) * this.graphWidth;
+        const y = (this.padding + this.graphHeight) - ((q2c - limits.q2_min) / q2Range) * this.graphHeight;
 
         return { x, y };
     }
@@ -58,78 +72,130 @@ export class JointSpaceVisualizer {
         const width = parseFloat(this.canvas.style.width);
         const height = parseFloat(this.canvas.style.height);
 
-        // Clear
         this.ctx.clearRect(0, 0, width, height);
-
-        // Draw Axes
         const limits = this.state.settings.limits || { q1_min: -1.57, q1_max: 1.57, q2_min: -2.5, q2_max: 2.5 };
 
-        // Border
-        this.ctx.strokeStyle = '#444';
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(this.padding, this.padding, this.graphWidth, this.graphHeight);
+        // Draw Colored Limits Box
+        // q1 limits (Vertical lines) -> Red (#ff5252)
+        // q2 limits (Horizontal lines) -> Cyan (#00bcd4)
 
-        // Grid (Optional)
-        this.ctx.strokeStyle = '#333';
+        const pMin = this.toCanvas(limits.q1_min, limits.q2_min, limits);
+        const pMax = this.toCanvas(limits.q1_max, limits.q2_max, limits);
+
+        const left = pMin.x;
+        const right = pMax.x;
+        const bottom = pMin.y;
+        const top = pMax.y;
+
+        // Grid System
         this.ctx.lineWidth = 1;
-
-        // Center Lines (0,0) if visible
+        this.ctx.strokeStyle = '#333';
+        this.ctx.beginPath();
+        // Zero axes
         if (limits.q1_min < 0 && limits.q1_max > 0) {
             const p0 = this.toCanvas(0, limits.q2_min, limits);
             const p1 = this.toCanvas(0, limits.q2_max, limits);
-            this.ctx.beginPath();
-            this.ctx.moveTo(p0.x, p0.y);
-            this.ctx.lineTo(p1.x, p1.y);
-            this.ctx.stroke();
+            this.ctx.moveTo(p0.x, bottom); this.ctx.lineTo(p1.x, top);
         }
         if (limits.q2_min < 0 && limits.q2_max > 0) {
             const p0 = this.toCanvas(limits.q1_min, 0, limits);
             const p1 = this.toCanvas(limits.q1_max, 0, limits);
-            this.ctx.beginPath();
-            this.ctx.moveTo(p0.x, p0.y);
-            this.ctx.lineTo(p1.x, p1.y);
-            this.ctx.stroke();
+            this.ctx.moveTo(left, p0.y); this.ctx.lineTo(right, p0.y);
         }
+        this.ctx.stroke();
+
+        // Workspace Limits (Colored)
+        this.ctx.lineWidth = 3;
+
+        // Top (q2 Max) - Cyan
+        this.ctx.beginPath();
+        this.ctx.strokeStyle = '#00bcd4';
+        this.ctx.moveTo(left, top);
+        this.ctx.lineTo(right, top);
+        this.ctx.stroke();
+
+        // Bottom (q2 Min) - Cyan
+        this.ctx.beginPath();
+        this.ctx.strokeStyle = '#00bcd4';
+        this.ctx.moveTo(left, bottom);
+        this.ctx.lineTo(right, bottom);
+        this.ctx.stroke();
+
+        // Left (q1 Min) - Red
+        this.ctx.beginPath();
+        this.ctx.strokeStyle = '#ff5252';
+        this.ctx.moveTo(left, top);
+        this.ctx.lineTo(left, bottom);
+        this.ctx.stroke();
+
+        // Right (q1 Max) - Red
+        this.ctx.beginPath();
+        this.ctx.strokeStyle = '#ff5252';
+        this.ctx.moveTo(right, top);
+        this.ctx.lineTo(right, bottom);
+        this.ctx.stroke();
 
         // Labels
         this.ctx.fillStyle = '#888';
+        this.ctx.font = '12px Inter';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText("q1 (rad)", this.padding + this.graphWidth / 2, height - 10);
+        this.ctx.fillText("Shoulder Joint (q1)", this.padding + this.graphWidth / 2, height - 10);
 
         this.ctx.save();
-        this.ctx.translate(20, this.padding + this.graphHeight / 2);
+        this.ctx.translate(15, this.padding + this.graphHeight / 2);
         this.ctx.rotate(-Math.PI / 2);
         this.ctx.textAlign = 'center';
-        this.ctx.fillText("q2 (rad)", 0, 0);
+        this.ctx.fillText("Elbow Joint (q2)", 0, 0);
         this.ctx.restore();
 
         // Min/Max Text
         this.ctx.textAlign = 'center';
+        this.ctx.fillStyle = '#ff5252';
         this.ctx.fillText(limits.q1_min.toFixed(2), this.padding, height - 20);
         this.ctx.fillText(limits.q1_max.toFixed(2), width - this.padding, height - 20);
 
         this.ctx.textAlign = 'right';
+        this.ctx.fillStyle = '#00bcd4';
         this.ctx.fillText(limits.q2_max.toFixed(2), this.padding - 10, this.padding + 5);
         this.ctx.fillText(limits.q2_min.toFixed(2), this.padding - 10, height - this.padding + 5);
     }
 
     drawTrajectory() {
-        if (!this.trajectoryData || !this.trajectoryData.q1.length) return;
-
         const limits = this.state.settings.limits;
-        const q1s = this.trajectoryData.q1;
-        const q2s = this.trajectoryData.q2;
 
-        this.ctx.beginPath();
-        this.ctx.strokeStyle = '#00e5ff'; // Cyan
-        this.ctx.lineWidth = 2;
+        // 1. Draw Executed Trace (Ghost)
+        if (this.traceData.q1.length > 1) {
+            this.ctx.beginPath();
+            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; // Faint white
+            this.ctx.lineWidth = 1;
 
-        for (let i = 0; i < q1s.length; i++) {
-            const p = this.toCanvas(q1s[i], q2s[i], limits);
-            if (i === 0) this.ctx.moveTo(p.x, p.y);
-            else this.ctx.lineTo(p.x, p.y);
+            const q1s = this.traceData.q1;
+            const q2s = this.traceData.q2;
+
+            for (let i = 0; i < q1s.length; i++) {
+                const p = this.toCanvas(q1s[i], q2s[i], limits);
+                if (i === 0) this.ctx.moveTo(p.x, p.y);
+                else this.ctx.lineTo(p.x, p.y);
+            }
+            this.ctx.stroke();
         }
-        this.ctx.stroke();
+
+        // 2. Draw Planned Trajectory (Preview)
+        if (this.trajectoryData && this.trajectoryData.q1.length) {
+            this.ctx.beginPath();
+            this.ctx.strokeStyle = '#00e5ff'; // Cyan
+            this.ctx.lineWidth = 2;
+
+            const q1s = this.trajectoryData.q1;
+            const q2s = this.trajectoryData.q2;
+
+            for (let i = 0; i < q1s.length; i++) {
+                const p = this.toCanvas(q1s[i], q2s[i], limits);
+                if (i === 0) this.ctx.moveTo(p.x, p.y);
+                else this.ctx.lineTo(p.x, p.y);
+            }
+            this.ctx.stroke();
+        }
     }
 
     drawRobotState() {
@@ -139,14 +205,27 @@ export class JointSpaceVisualizer {
 
         const p = this.toCanvas(q1, q2, limits);
 
+        // Draw Crosshairs
+        this.ctx.beginPath();
+        this.ctx.strokeStyle = 'rgba(255, 68, 68, 0.5)';
+        this.ctx.setLineDash([2, 4]);
+        this.ctx.moveTo(p.x, this.padding);
+        this.ctx.lineTo(p.x, this.padding + this.graphHeight); // Vert
+        this.ctx.moveTo(this.padding, p.y);
+        this.ctx.lineTo(this.padding + this.graphWidth, p.y); // Horiz
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+
         // Draw Dot
         this.ctx.beginPath();
         this.ctx.fillStyle = '#ff4444'; // Red
         this.ctx.arc(p.x, p.y, 6, 0, 2 * Math.PI);
         this.ctx.fill();
+        this.ctx.stroke();
 
         // Draw Coordinates Text
         this.ctx.fillStyle = '#fff';
+        this.ctx.font = '12px monospace';
         this.ctx.textAlign = 'left';
         this.ctx.fillText(`(${q1.toFixed(2)}, ${q2.toFixed(2)})`, p.x + 10, p.y - 10);
     }
@@ -154,9 +233,9 @@ export class JointSpaceVisualizer {
     animate() {
         // Only draw if visible to save resources
         if (this.canvas.offsetParent !== null) {
-            // Check for size change (hacky but effective for tab switches)
             const parent = this.canvas.parentElement;
-            if (parent.clientWidth !== parseFloat(this.canvas.style.width)) {
+            // Check for size change
+            if (Math.abs(parent.clientWidth - parseFloat(this.canvas.style.width)) > 1) {
                 this.resize();
             }
 
