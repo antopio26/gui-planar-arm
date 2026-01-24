@@ -33,6 +33,17 @@ WEB_OPTIONS = {
     'port': 6969
 }
 
+# Text Generation Defaults
+TEXT_OPTIONS = {
+    'mode': 'linear',
+    'fontSize': 0.04, # Slightly smaller for safety
+    'x': 0.15,
+    'y': 0.15,
+    'angle': -90,
+    'radius': 0.20,
+    'offset': 90
+}
+
 # Trajectory Validation Limits
 MAX_SPEED_RAD = 10.0
 MAX_ACC_TOLERANCE_FACTOR = 40.0

@@ -98,6 +98,17 @@ export class Manipulator {
         return [p1_rel, p2_rel];
     }
 
+    getEndEffectorWorld() {
+        const l1 = this.settings['l1'];
+        const l2 = this.settings['l2'];
+        const q = this.q_coords;
+
+        const x = l1 * Math.cos(q[0]) + l2 * Math.cos(q[0] + q[1]);
+        const y = l1 * Math.sin(q[0]) + l2 * Math.sin(q[0] + q[1]);
+
+        return { x, y };
+    }
+
     // --- Drawing ---
 
     draw_pose(ctx) {

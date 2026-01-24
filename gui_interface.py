@@ -2,6 +2,7 @@ import eel
 import numpy as np
 import traceback
 from time import sleep
+import math
 
 from lib import trajpy as tpy
 from config import SETTINGS, SIZES, MAX_SPEED_RAD, MAX_ACC_TOLERANCE_FACTOR, SERIAL_PORT
@@ -12,7 +13,8 @@ from lib import binary_protocol as bp
 from lib import char_gen
 from lib import transform
 import plotting
-import math
+
+# --- INTERNAL HELPER FUNCTIONS ---
 
 def read_position_cartesian(sizes=None) -> list[float]:
     if sizes is None:
@@ -35,7 +37,7 @@ def read_position_cartesian(sizes=None) -> list[float]:
     points = tpy.dk(np.array(q_actual), sizes)
     return [points[0,0], points[1,0]]
 
-def validate_trajectory(q, dq, ddq):
+def validate_trajectory_dynamics(q, dq, ddq):
     print("\n--- TRAJECTORY VALIDATION ---")
     MAX_ACC_RAD = SETTINGS['max_acc'] * MAX_ACC_TOLERANCE_FACTOR
     
@@ -70,30 +72,9 @@ def validate_trajectory(q, dq, ddq):
 
     return valid
 
-def trace_trajectory(q:tuple[list,list,list]):
-    q1 = q[0][:]
-    q2 = q[1][:]
-    penups = q[2][:]
-    eel.js_draw_traces([q1, q2])
-    eel.js_draw_pose([q1[-1], q2[-1]], penups[-1])
-
-    # DEBUG
-    x = [] 
-    for i in range(len(q1)):
-        x.append(tpy.dk(np.array([q1[i], q2[i]]).T))
-    plotting.debug_plotXY([xt[0] for xt in x], [yt[1] for yt in x], "xy")
-
-# --- EEL EXPOSED FUNCTIONS ---
-
-@eel.expose
-def py_log(msg):
-    print(msg)
-
 def resolve_config(settings_override=None):
     sizes = SIZES.copy()
-    limits = None # usage of imported JOINT_LIMITS is possible but we need to check if it's imported globally.
-    # It is imported in py_get_config only. 
-    # Let's import it here or trust that if settings_override is None we use defaults passed to functions
+    limits = None 
     
     if settings_override:
         if 'l1' in settings_override: sizes['l1'] = float(settings_override['l1'])
@@ -102,255 +83,44 @@ def resolve_config(settings_override=None):
         
     return sizes, limits
 
-@eel.expose
-def py_get_data(settings_override=None):
-    try:
-        # Use settings override if provided, otherwise defaults
-        current_sizes = SIZES.copy() # Start with default SIZES
-        current_limits = None # Start with no limits, or default limits if available globally
-
-        if settings_override:
-            if 'l1' in settings_override: current_sizes['l1'] = float(settings_override['l1'])
-            if 'l2' in settings_override: current_sizes['l2'] = float(settings_override['l2'])
-            if 'limits' in settings_override:
-                 l = settings_override['limits']
-                 current_limits = {
-                     'q1_min': float(l['q1_min']), 'q1_max': float(l['q1_max']),
-                     'q2_min': float(l['q2_min']), 'q2_max': float(l['q2_max'])
-                 }
-
-        # Retrieve Data from JS (Consume/Clear it)
-        data_points = eel.js_get_data()() 
-        if not data_points:
-            print("No data received from JS")
-            return False
-
-        # Generate Trajectory
-        q0s, q1s, penups, ts = [], [], [], []
-        
-        # We need start configuration. 
-        # If we have a last known Q, use it. Otherwise use homing/zero.
-        current_joint_pos = state.last_known_q if state.last_known_q else [0, 0]
-
-        # Add initial path from current position to the first point in data_points
-        # This ensures continuity from the robot's current position
-        if data_points and len(data_points[0]['points']) > 0:
-            current_cartesian_pos = read_position_cartesian(current_sizes)
-            first_target_cartesian_pos = data_points[0]['points'][0]
-            
-            # Create a line segment from current position to the first point
-            initial_path_segment = {
-                'type': 'line', 
-                'points': [current_cartesian_pos, first_target_cartesian_pos], 
-                'data': {'penup': True} # Usually pen up for initial move
-            }
-            data_points = [initial_path_segment] + data_points
-
-        for patch in data_points:
-            # We must use slice_trj with the correct sizes/limits
-            (q0s_p, q1s_p, penups_p, ts_p) = tpy.slice_trj(
-                patch, 
-                Tc=SETTINGS['Tc'],
-                max_acc=SETTINGS['max_acc'],
-                line=SETTINGS['line_tl'],
-                circle=SETTINGS['circle_tl'],
-                sizes=current_sizes,
-                limits=current_limits,
-                initial_q=current_joint_pos
-            )
-            # Stitching logic
-            q0s += q0s_p if len(q0s) == 0 else q0s_p[1:] 
-            q1s += q1s_p if len(q1s) == 0 else q1s_p[1:]
-            penups += penups_p if len(penups) == 0 else penups_p[1:]
-            ts += [(t + ts[-1] if len(ts) > 0  else t) for t in (ts_p if len(ts) == 0 else ts_p[1:])]
-            
-            # Update seed for next patch
-            if len(q0s_p) > 0:
-                current_joint_pos = [q0s_p[-1], q1s_p[-1]]
-
-        q = (q0s, q1s, penups)
-        dq = (tpy.find_velocities(q[0], ts), tpy.find_velocities(q[1], ts))
-        ddq = (tpy.find_accelerations(dq[0], ts), tpy.find_accelerations(dq[1], ts))
-        
-        if not validate_trajectory(q, dq, ddq):
-            raise Exception("Trajectory Validation Failed: Safety limit exceeded. Execution aborted.")
-            
-        state.stop_requested = False # Reset flag before start
-        serial_manager.send_data('trj', q=q, dq=dq, ddq=ddq)
-        
-        if len(q0s) > 0:
-             state.last_known_q = [q0s[-1], q1s[-1]]
-        
-        return True
-        
-        trace_trajectory(q)
-        
-        # DEBUG Plots (Optional, can comment out if slow)
-        # plotting.debug_plot(q[0], 'q1')
-        
-    except Exception as e:
-        print(f"Error in py_get_data: {e}")
-        traceback.print_exc()
-
-@eel.expose
-def py_compute_trajectory(settings_override=None):
+def _generate_trajectory_data(data_points, current_sizes, current_limits, current_joint_pos):
     """
-    Computes the trajectory in Joint Space (q1, q2) without sending it to serial.
-    Returns: { 'q1': [float], 'q2': [float], 'penups': [bool] } or None if error.
+    Common logic to stitch trajectory patches into full joint lists.
+    Returns: (q0s, q1s, penups, ts, last_joint_pos)
     """
-    try:
-        # Retrieve Data from JS explicitly without consuming it (Preview Mode)
-        # Note: eel.function(args)() -> Call immediately and get return
-        data = eel.js_get_data()() 
-        
-        if not data:
-            return None # No data to preview
-            
-        sizes, limits = resolve_config(settings_override)
-
-        # We assume start from current position (or last known)
-        # Pass resolved sizes to ensure correct FK calculation
-        current_q = read_position_cartesian(sizes)
-        
-        # Add initial path from current position
-        if len(data) > 0:
-             data = [{'type':'line', 'points':[current_q, data[0]['points'][0]], 'data':{'penup':True}}] + data[::]
-        
-        # Stitch patches
-        q0s = []
-        q1s = []
-        penups = []
-        ts = []
-
-        # Simulation/Preview only -> Use internal state last know
-        current_joint_pos = state.last_known_q 
-        
-        for patch in data: 
-            (q0s_p, q1s_p, penups_p, ts_p) = tpy.slice_trj(
-                patch, 
-                Tc=SETTINGS['Tc'],
-                max_acc=SETTINGS['max_acc'],
-                line=SETTINGS['line_tl'],
-                circle=SETTINGS['circle_tl'],
-                sizes=sizes,
-                limits=limits,
-                initial_q=current_joint_pos
-            )
-            # Stitching logic
-            q0s += q0s_p if len(q0s) == 0 else q0s_p[1:] 
-            q1s += q1s_p if len(q1s) == 0 else q1s_p[1:]
-            penups += penups_p if len(penups) == 0 else penups_p[1:]
-            ts += [(t + ts[-1] if len(ts) > 0  else t) for t in (ts_p if len(ts) == 0 else ts_p[1:])]
-            
-            # Update seed for next patch
-            if len(q0s_p) > 0:
-                current_joint_pos = [q0s_p[-1], q1s_p[-1]]
-
-        return {
-            'q1': q0s,
-            'q2': q1s,
-            'penups': penups,
-            't': ts
-        }
-
-    except Exception as e:
-        print(f"Error in py_compute_trajectory: {e}")
-        traceback.print_exc()
-        return None
-
-@eel.expose
-def py_stop_trajectory():
-    print("Received STOP request from UI")
-    state.stop_requested = True
+    q0s, q1s, penups, ts = [], [], [], []
     
-    if SETTINGS['ser_started']:
-        try:
-            packet = bp.encode_stop_command()
-            scm.write_data(packet)
-            print("Physical STOP command sent to Firmware.")
-        except Exception as e:
-            print(f"Failed to send STOP command: {e}")
+    for patch in data_points:
+        (q0s_p, q1s_p, penups_p, ts_p) = tpy.slice_trj(
+            patch, 
+            Tc=SETTINGS['Tc'],
+            max_acc=SETTINGS['max_acc'],
+            line=SETTINGS['line_tl'],
+            circle=SETTINGS['circle_tl'],
+            sizes=current_sizes,
+            limits=current_limits,
+            initial_q=current_joint_pos
+        )
+        # Stitching logic
+        q0s += q0s_p if len(q0s) == 0 else q0s_p[1:] 
+        q1s += q1s_p if len(q1s) == 0 else q1s_p[1:]
+        penups += penups_p if len(penups) == 0 else penups_p[1:]
+        ts += [(t + ts[-1] if len(ts) > 0  else t) for t in (ts_p if len(ts) == 0 else ts_p[1:])]
+        
+        # Update seed for next patch
+        if len(q0s_p) > 0:
+            current_joint_pos = [q0s_p[-1], q1s_p[-1]]
+            
+    return q0s, q1s, penups, ts, current_joint_pos
+
+
+# --- EEL EXPOSED FUNCTIONS ---
+
+# 1. System & Config
 
 @eel.expose
-def py_log_data():
-    # Deprecated or needs update if used? 
-    # original logic wrote to 'log_data.csv' from global dict
-    # Re-implementing basic dump
-    try:
-        with open('log_data.csv', 'w') as f:
-            f.write("time,q0,q1\n") # Minimal header
-            # Dump state.log_data if populated (currently empty in init)
-            # The original code logic was a bit weird constructing string
-            pass
-    except Exception as e:
-        print(e)
-
-@eel.expose
-def py_homing_cmd():
-    if SETTINGS['ser_started']:
-        # Real Robot Homing
-        packet = bp.encode_homing_command()
-        print(f"Homing packet sent: {packet}")
-        scm.write_data(packet)
-        # We assume the robot resets. 
-        # Ideally we should wait for feedback, but for now we reset state locally too.
-        state.last_known_q = [0.0, 0.0]
-        state.firmware.q0 = 0.0
-        state.firmware.q1 = 0.0
-    else:
-        # Simulated Homing
-        print("Homing: SIMULATION MODE")
-        
-        # Get start position
-        q_start = state.last_known_q
-        q_end = [0.0, 0.0]
-        
-        # If already at 0, do nothing
-        if abs(q_start[0]) < 0.001 and abs(q_start[1]) < 0.001:
-            print("Already at home.")
-            return
-
-        # Generate smooth trajectory (Cycloidal)
-        # Using max_acc/5 for gentle homing
-        acc = SETTINGS['max_acc'] * 0.2 
-        
-        # Trajpy cycloidal returns tuple (functions, duration)
-        # We need to compose for both joints.
-        # cycloidal([start, end], acc)
-        
-        (f0, tf0) = tpy.cycloidal([q_start[0], q_end[0]], acc)
-        (f1, tf1) = tpy.cycloidal([q_start[1], q_end[1]], acc)
-        
-        tf = max(tf0, tf1)
-        
-        # Sample points
-        ts = tpy.rangef(0, SETTINGS['Tc'], tf, True)
-        
-        q0s = [f0[0](t) for t in ts]
-        q1s = [f1[0](t) for t in ts]
-        
-        # Velocity/Acc (Optional for sim but good for plot)
-        dq0s = [f0[1](t) for t in ts]
-        dq1s = [f1[1](t) for t in ts]
-        
-        ddq0s = [f0[2](t) for t in ts]
-        ddq1s = [f1[2](t) for t in ts] # Corrected from f0 to f1
-        
-        # Package for serial_manager (Sim Engine)
-        # It expects tuple lists: q=(q0s, q1s, penups)
-        # penups = 1 (Up) usually for homing to be safe? Or 0?
-        # Let's say 1 (Up).
-        penups = [1] * len(q0s)
-        
-        q = (q0s, q1s, penups)
-        dq = (dq0s, dq1s)
-        ddq = (ddq0s, ddq1s) # We don't really use this in sim, but consisteny
-        
-        # Send to manager
-        serial_manager.send_data('trj', q=q, dq=dq, ddq=ddq)
-        
-        # Update last known
-        state.last_known_q = [0.0, 0.0]
+def py_log(msg):
+    print(msg)
 
 @eel.expose
 def py_serial_online():
@@ -376,90 +146,24 @@ def py_serial_startup(port_name=None):
     return SETTINGS['ser_started']
 
 @eel.expose
-def py_clear_state():
-    print("Clearing Backend State...")
-    # Reset State
-    state.recording_active = False
-    state.reset_recording()
-    
-    # If serial is connected, maybe stop any current motion?
-    # Sending empty trajectory or stop?
-    # For now, just reset internal trackers.
-    state.last_known_q = [state.firmware.q0, state.firmware.q1]
-    
-    if SETTINGS['ser_started']:
-        # Optional: Send a specific invalidation command if protocol supports it
-        pass
-        
-    return True
-
-@eel.expose
 def py_get_config():
-    # Return relevant config to frontend
-    # config contains callables (lambdas), so we pick what we need
-    from config import JOINT_LIMITS 
-    
+    from config import JOINT_LIMITS, TEXT_OPTIONS
     return {
         'sizes': SIZES,
         'limits': JOINT_LIMITS,
-        'max_acc': SETTINGS['max_acc']
+        'max_acc': SETTINGS['max_acc'],
+        'text_options': TEXT_OPTIONS
     }
 
+@eel.expose
+def py_clear_state():
+    print("Clearing Backend State...")
+    state.recording_active = False
+    state.reset_recording()
+    state.last_known_q = [state.firmware.q0, state.firmware.q1]
+    return True
 
-def _apply_linear_transform(patches, x_offset, y_offset, angle_deg):
-    angle_rad = math.radians(angle_deg)
-    cos_a = math.cos(angle_rad)
-    sin_a = math.sin(angle_rad)
-    
-    transformed = []
-    for patch in patches:
-        new_points = []
-        for p in patch['points']:
-            # Rotation
-            x_rot = p[0] * cos_a - p[1] * sin_a
-            y_rot = p[0] * sin_a + p[1] * cos_a
-            # Translation
-            new_points.append([x_rot + x_offset, y_rot + y_offset])
-            
-        transformed.append({
-            'type': patch['type'],
-            'points': new_points,
-            'data': patch['data']
-        })
-    return transformed
-
-def _apply_curved_transform(patches, radius, offset_angle):
-    # Convert patches to the format expected by transform.py (if needed)
-    # OR better: just implement the loop here using transform.apply_curved_transform logic
-    # But since we wrote apply_curved_transform to take a list of dicts {x,y,z}, 
-    # we can adapt.
-    
-    transformed = []
-    
-    for patch in patches:
-        # Create a temporary trajectory list for this patch's points
-        temp_traj = []
-        for p in patch['points']:
-            temp_traj.append({'x': p[0], 'y': p[1], 'z': 0}) # Z doesn't matter much here
-            
-        # Transform
-        # Note: char_gen outputs X as horizontal, Y as vertical.
-        # transform.apply_curved_transform maps X to Angle, Y to Radius.
-        # We need to ensure scale is correct. 
-        # But stick with unit units?
-        
-        # Call the library function
-        res = transform.apply_curved_transform(temp_traj, radius, start_angle_deg=offset_angle)
-        
-        new_points = [[pt['x'], pt['y']] for pt in res]
-        
-        transformed.append({
-            'type': patch['type'],
-            'points': new_points,
-            'data': patch['data']
-        })
-        
-    return transformed
+# 2. Text Generation
 
 @eel.expose
 def py_generate_text(text, options, settings_override=None):
@@ -470,24 +174,39 @@ def py_generate_text(text, options, settings_override=None):
         mode = options.get('mode', 'linear')
         font_size = float(options.get('fontSize', 0.05))
         
-        
-        # 1. Generate Base Text (Linear, at origin)
-        # We pass start_pos=(0,0) and handle placement via transform
+        # 1. Generate Base Text at origin
         patches = char_gen.text_to_traj(text, (0,0), font_size, char_spacing=font_size*0.2)
         
         # 2. Apply Transform
         final_patches = []
-        
         if mode == 'linear':
             x = float(options.get('x', 0.05))
             y = float(options.get('y', 0.0))
             angle = float(options.get('angle', 0.0))
-            final_patches = _apply_linear_transform(patches, x, y, angle)
             
+            # Inline Transform Logic
+            angle_rad = math.radians(angle)
+            cos_a = math.cos(angle_rad)
+            sin_a = math.sin(angle_rad)
+            
+            for patch in patches:
+                new_points = []
+                for p in patch['points']:
+                    x_rot = p[0] * cos_a - p[1] * sin_a
+                    y_rot = p[0] * sin_a + p[1] * cos_a
+                    new_points.append([x_rot + x, y_rot + y])
+                final_patches.append({**patch, 'points': new_points})
+
         elif mode == 'curved':
             radius = float(options.get('radius', 0.2))
             offset = float(options.get('offset', 90))
-            final_patches = _apply_curved_transform(patches, radius, offset)
+            
+            # transform.apply_curved_transform expects list of dicts {x,y}
+            for patch in patches:
+                temp_traj = [{'x': p[0], 'y': p[1], 'z': 0} for p in patch['points']]
+                res = transform.apply_curved_transform(temp_traj, radius, start_angle_deg=offset)
+                new_points = [[pt['x'], pt['y']] for pt in res]
+                final_patches.append({**patch, 'points': new_points})
             
         else:
             final_patches = patches
@@ -501,41 +220,146 @@ def py_generate_text(text, options, settings_override=None):
 
 @eel.expose
 def py_validate_text(text, options, settings_override=None):
-    # Generate the trajectory first
     patches = py_generate_text(text, options, settings_override)
-    
-    if not patches:
-        return {'valid': True, 'message': 'Empty'}
+    if not patches: return {'valid': True, 'message': 'Empty'}
 
-    valid = True
-    msg = "OK"
-    
     sizes, limits = resolve_config(settings_override)
     
-    # Check every point against IK or Workspace limits
-    # We can use tpy.ik to check if a solution exists
     for patch in patches:
         for p in patch['points']:
             try:
-                # Check if point is reachable
-                # tpy.ik returns numpy array of q1, q2
-                # If it raises error or returns NaNs (depends on implementation), it's invalid.
-                
-                x, y = p
-                
-                # Check using updated IK with limits
-                # tpy.ik returns None if out of reach or limits violation
-                res = tpy.ik(x, y, 0, None, sizes, limits)
-                
+                res = tpy.ik(p[0], p[1], 0, None, sizes, limits)
                 if res is None:
-                    valid = False
-                    msg = "Point out of reach or Limit violation"
-                    break
-                    
+                    return {'valid': False, 'message': "Point out of reach or Limit violation"}
             except Exception as e:
-                valid = False
-                msg = f"IK Error: {e}"
-                break
-        if not valid: break
+                return {'valid': False, 'message': f"IK Error: {e}"}
         
-    return {'valid': valid, 'message': msg}
+    return {'valid': True, 'message': "OK"}
+
+# 3. Trajectory Management
+
+@eel.expose
+def py_compute_trajectory(settings_override=None):
+    """
+    Computes the trajectory in Joint Space (q1, q2) without sending it to serial.
+    """
+    try:
+        data = eel.js_get_data()() 
+        if not data: return None
+            
+        sizes, limits = resolve_config(settings_override)
+        current_q = read_position_cartesian(sizes)
+        
+        # Add initial path from current position
+        if len(data) > 0:
+             data = [{'type':'line', 'points':[current_q, data[0]['points'][0]], 'data':{'penup':True}}] + data[::]
+        
+        # Use internal helper
+        q0s, q1s, penups, ts, _ = _generate_trajectory_data(data, sizes, limits, state.last_known_q)
+
+        return {
+            'q1': q0s,
+            'q2': q1s,
+            'penups': penups,
+            't': ts
+        }
+
+    except Exception as e:
+        print(f"Error in py_compute_trajectory: {e}")
+        traceback.print_exc()
+        return None
+
+@eel.expose
+def py_get_data(settings_override=None):
+    try:
+        sizes, limits = resolve_config(settings_override)
+        data_points = eel.js_get_data()() 
+        
+        if not data_points:
+            print("No data received from JS")
+            return False
+
+        current_joint_pos = state.last_known_q if state.last_known_q else [0, 0]
+
+        # Add initial path segment
+        if data_points and len(data_points[0]['points']) > 0:
+            current_cartesian = read_position_cartesian(sizes)
+            first_target = data_points[0]['points'][0]
+            
+            initial_segment = {
+                'type': 'line', 
+                'points': [current_cartesian, first_target], 
+                'data': {'penup': True}
+            }
+            data_points = [initial_segment] + data_points
+
+        # Generate Full Trajectory
+        q0s, q1s, penups, ts, last_q = _generate_trajectory_data(data_points, sizes, limits, current_joint_pos)
+
+        q = (q0s, q1s, penups)
+        dq = (tpy.find_velocities(q[0], ts), tpy.find_velocities(q[1], ts))
+        ddq = (tpy.find_accelerations(dq[0], ts), tpy.find_accelerations(dq[1], ts))
+        
+        if not validate_trajectory_dynamics(q, dq, ddq):
+            raise Exception("Trajectory Validation Failed: Safety limit exceeded.")
+            
+        state.stop_requested = False 
+        serial_manager.send_data('trj', q=q, dq=dq, ddq=ddq)
+        
+        if len(q0s) > 0:
+             state.last_known_q = last_q
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error in py_get_data: {e}")
+        traceback.print_exc()
+        return False
+
+@eel.expose
+def py_stop_trajectory():
+    print("Received STOP request from UI")
+    state.stop_requested = True
+    
+    if SETTINGS['ser_started']:
+        try:
+            packet = bp.encode_stop_command()
+            scm.write_data(packet)
+            print("Physical STOP command sent to Firmware.")
+        except Exception as e:
+            print(f"Failed to send STOP command: {e}")
+
+@eel.expose
+def py_homing_cmd():
+    if SETTINGS['ser_started']:
+        packet = bp.encode_homing_command()
+        print(f"Homing packet sent: {packet}")
+        scm.write_data(packet)
+        state.last_known_q = [0.0, 0.0]
+        state.firmware.q0 = 0.0
+        state.firmware.q1 = 0.0
+    else:
+        print("Homing: SIMULATION MODE")
+        q_start = state.last_known_q
+        q_end = [0.0, 0.0]
+        
+        if abs(q_start[0]) < 0.001 and abs(q_start[1]) < 0.001:
+            return
+
+        acc = SETTINGS['max_acc'] * 0.2 
+        (f0, tf0) = tpy.cycloidal([q_start[0], q_end[0]], acc)
+        (f1, tf1) = tpy.cycloidal([q_start[1], q_end[1]], acc)
+        
+        tf = max(tf0, tf1)
+        ts = tpy.rangef(0, SETTINGS['Tc'], tf, True)
+        
+        q0s = [f0[0](t) for t in ts]
+        q1s = [f1[0](t) for t in ts]
+        penups = [1] * len(q0s)
+        
+        q = (q0s, q1s, penups)
+        dq = ([f0[1](t) for t in ts], [f1[1](t) for t in ts])
+        ddq = ([f0[2](t) for t in ts], [f1[2](t) for t in ts])
+        
+        serial_manager.send_data('trj', q=q, dq=dq, ddq=ddq)
+        state.last_known_q = [0.0, 0.0]
