@@ -211,6 +211,7 @@ function setMajorMode(mode) {
     state.textPreview = [];
     state.generatedTextPatches = [];
     jointVisualizer.setTrajectoryData({ q1: [], q2: [] }, []);
+    if (state.manipulator) state.manipulator.reset_trace();
 
     // Partially stop backend if needed, but not full stop
     // API.stopTrajectory();
@@ -297,6 +298,7 @@ ui.btnClearCanvas.addEventListener('click', async () => {
     state.resetDrawing();
     state.sentPoints = [];
     state.sentTrajectory.reset();
+    if (state.manipulator) state.manipulator.reset_trace();
 
     // Also clear backend
     await API.stopTrajectory();
@@ -543,6 +545,12 @@ async function generatePreview() {
             if (jointData) {
                 console.log("Computed Joint Path:", jointData.q1.length, "points");
                 jointVisualizer.setTrajectoryData(jointData.q1, jointData.q2);
+                if (timeVisualizer && jointData.t) {
+                    timeVisualizer.setPlannedPath(jointData.t, jointData.q1, jointData.q2);
+                    if (jointData.t.length > 0) {
+                        state.expectedDuration = jointData.t[jointData.t.length - 1];
+                    }
+                }
             }
         }
 

@@ -46,20 +46,25 @@ export class Manipulator {
     // --- Trace Management ---
 
     add2trace(q) {
-        const [x1, x2] = this.dk(q);
-        // Store point with pen state
-        // Trace 1 (Elbow) removed as per request
-        this.traces['x2'].push({ x: x2[0], y: x2[1], pen: this.penState });
+        // Calculate Absolute Position (Forward Kinematics)
+        const l1 = this.settings['l1'];
+        const l2 = this.settings['l2'];
+
+        const x1_abs = l1 * Math.cos(q[0]);
+        const y1_abs = l1 * Math.sin(q[0]);
+
+        const x2_abs = x1_abs + l2 * Math.cos(q[0] + q[1]);
+        const y2_abs = y1_abs + l2 * Math.sin(q[0] + q[1]);
+
+        // Store Absolute Coordinates
+        this.traces['x2'].push({ x: x2_abs, y: y2_abs, pen: this.penState });
     }
 
     add_trace(points) {
         this.traces = { 'x2': [] };
         for (let point of points) {
-            // Check if point has pen info?
-            // Assuming points has 'x', 'y'. pen?
-            const [p1, p2] = abs2rel(point['x'], point['y'], this.settings);
-            // Trace 1 removed
-            this.traces['x2'].push({ x: p2[0], y: p2[1], pen: point.pen || 0 }); // Default down
+            // Assuming points are already in World Coordinates {x, y, pen}
+            this.traces['x2'].push({ x: point.x, y: point.y, pen: point.pen || 0 });
         }
     }
 
@@ -245,41 +250,37 @@ export class Manipulator {
 
     draw_traces(ctx) {
         // Traces are heavy, draw them efficiently
-        // Only check x2
-        if (this.traces['x2'].length < 1) return;
-
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-
-        // --- Trace 1 (Elbow) ---
-        // REMOVED
-
-
-        // --- Trace 2 (End Effector) ---
-        // Segments based on Pen State
-        ctx.lineWidth = 3;
-
         const path = this.traces['x2'];
         if (path.length < 2) return;
 
-        // Iterate and draw segments
-        // Optimization: Group contiguous segments of same state?
-        // Or just draw lineTo until state changes?
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 3;
 
+        // Helper to get pixel coords from stored absolute coords
+        const getPix = (pt) => {
+            const rel = abs2rel(pt.x, pt.y, this.settings);
+            return { x: rel[0], y: rel[1] };
+        };
+
+        // Iterate and draw segments
         let currentState = path[0].pen;
         ctx.beginPath();
         this.startSegmentStyle(ctx, currentState);
-        ctx.moveTo(path[0].x, path[0].y);
+
+        let p = getPix(path[0]);
+        ctx.moveTo(p.x, p.y);
 
         for (let i = 1; i < path.length; i++) {
-            const p = path[i];
+            const pt = path[i];
+            p = getPix(pt);
 
             // If state changed, stroke current path and start new one
-            if (p.pen !== currentState) {
+            if (pt.pen !== currentState) {
                 ctx.lineTo(p.x, p.y); // Finish segment at this point
                 ctx.stroke();
 
-                currentState = p.pen;
+                currentState = pt.pen;
                 ctx.beginPath();
                 this.startSegmentStyle(ctx, currentState);
                 ctx.moveTo(p.x, p.y); // Start new segment from here
