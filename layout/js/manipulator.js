@@ -14,6 +14,12 @@ export class Manipulator {
         const [p1, p2] = this.dk(q);
         this.p = p1;
         this.end_eff = p2;
+
+        this.penState = 1; // Default Up (1)
+    }
+
+    setPenState(state) {
+        this.penState = state;
     }
 
     // --- Getters & Setters ---
@@ -86,7 +92,7 @@ export class Manipulator {
 
     // --- Drawing ---
 
-    draw_pose(ctx, penDown = true) {
+    draw_pose(ctx) {
         const origin = this.settings['origin'];
 
         // Draw Joint Limits (Wedges)
@@ -114,13 +120,10 @@ export class Manipulator {
         this.drawJoint(ctx, origin.x, origin.y);
         this.drawJoint(ctx, this.p[0], this.p[1]);
 
-        // End Effector Color based on Pen State
-        // Passed as argument or fallback
-        const eeColor = penDown ? '#00e5ff' : '#ffea00'; // Cyan (Down) vs Yellow (Up/Move)? 
-        // Or Cyan (Down) vs Orange (Up)? 
-        // Let's use accent color for Down (Drawing) and maybe Orange/Yellow for Up.
+        // End Effector Color based on Pen State (0=Down, 1=Up)
+        const efColor = (this.penState === 0) ? '#00e5ff' : '#ffbb33';
+        this.drawJoint(ctx, this.end_eff[0], this.end_eff[1], efColor);
 
-        this.drawJoint(ctx, this.end_eff[0], this.end_eff[1], eeColor);
 
         // Draw Frames
         if (this.settings.showFrames) {

@@ -67,7 +67,7 @@ class SerialManager:
             # Update GUI with current position (Always, even if offline)
             if time() - last_gui_update > GUI_UPDATE_INTERVAL:
                 try:
-                    eel.js_draw_pose([state.firmware.q0, state.firmware.q1])
+                    eel.js_draw_pose([state.firmware.q0, state.firmware.q1], state.firmware.penup)
                 except:
                     pass
                 last_gui_update = time()
@@ -141,6 +141,7 @@ class SerialManager:
                         current_idx = limit - 1
                         state.firmware.q0 = data['q'][0][current_idx]
                         state.firmware.q1 = data['q'][1][current_idx]
+                        state.firmware.penup = data['q'][2][current_idx]
                         
                         if sent_count % 100 == 0:
                             print(f"Progress: {sent_count}/{num_points}")
@@ -180,11 +181,12 @@ class SerialManager:
                         # Update State
                         state.firmware.q0 = data['q'][0][i]
                         state.firmware.q1 = data['q'][1][i]
+                        state.firmware.penup = data['q'][2][i]
                         state.firmware.last_update = loop_start
                         
                         # Notify UI (Animation)
                         try:
-                            eel.js_draw_pose([state.firmware.q0, state.firmware.q1])
+                            eel.js_draw_pose([state.firmware.q0, state.firmware.q1], state.firmware.penup)
                         except:
                             pass # Ignore if eel closed
 

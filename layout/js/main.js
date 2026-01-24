@@ -525,9 +525,10 @@ API.initCallbacks({
         if (consoleEl) consoleEl.textContent = msg;
     },
 
-    onDrawPose: (q) => {
+    onDrawPose: (q, penup) => {
         if (state.manipulator) {
             state.manipulator.q = q;
+            if (penup !== undefined) state.manipulator.setPenState(penup);
 
             // Update Monitor
             if (ui.monQ1) ui.monQ1.value = q[0].toFixed(2);

@@ -64,8 +64,8 @@ export const API = {
             if (callbacks.onLog) callbacks.onLog(msg);
         };
 
-        window.js_draw_pose = (q) => {
-            if (callbacks.onDrawPose) callbacks.onDrawPose(q);
+        window.js_draw_pose = (q, penup) => {
+            if (callbacks.onDrawPose) callbacks.onDrawPose(q, penup);
         };
 
         window.js_draw_traces = (points) => {

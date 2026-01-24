@@ -7,6 +7,7 @@ class FirmwareState:
     q1: float = 0.0
     buffer_level: int = 0
     last_update: float = 0
+    penup: int = 1 # 1=Up, 0=Down
     
 @dataclass
 class RobotState:

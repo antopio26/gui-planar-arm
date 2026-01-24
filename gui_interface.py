@@ -67,11 +67,12 @@ def validate_trajectory(q, dq, ddq):
 
     return valid
 
-def trace_trajectory(q:tuple[list,list]):
+def trace_trajectory(q:tuple[list,list,list]):
     q1 = q[0][:]
     q2 = q[1][:]
+    penups = q[2][:]
     eel.js_draw_traces([q1, q2])
-    eel.js_draw_pose([q1[-1], q2[-1]])
+    eel.js_draw_pose([q1[-1], q2[-1]], penups[-1])
 
     # DEBUG
     x = [] 
