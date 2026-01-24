@@ -85,6 +85,9 @@ export class Manipulator {
     draw_pose(ctx) {
         const origin = this.settings['origin'];
 
+        // Draw Joint Limits (Wedges)
+        this.drawJointLimits(ctx, origin);
+
         ctx.beginPath();
         ctx.lineWidth = 4;
         ctx.lineCap = 'round';
@@ -105,6 +108,67 @@ export class Manipulator {
         this.drawJoint(ctx, origin.x, origin.y);
         this.drawJoint(ctx, this.p[0], this.p[1]);
         this.drawJoint(ctx, this.end_eff[0], this.end_eff[1], '#00e5ff'); // Distinguish end effector
+    }
+
+    drawJointLimits(ctx, origin) {
+        if (!this.settings.limits) return;
+
+        const limits = this.settings.limits;
+        // Canvas Y is inverted relative to World Y.
+        // World Angle theta increases CCW.
+        // Canvas Angle increases CW.
+        // So Canvas Angle = -World Angle.
+
+        // --- Joint 1 Limits (Base) ---
+        // Range: [q1_min, q1_max]
+        // In Canvas: [-q1_max, -q1_min] (since -q1_max is the "start" in CW direction if we map strictly?)
+        // Let's stick to: Start = -q1_max, End = -q1_min
+
+        const q1_min = limits.q1_min;
+        const q1_max = limits.q1_max;
+
+        ctx.beginPath();
+        ctx.moveTo(origin.x, origin.y);
+        // Note: ctx.arc takes (x, y, radius, startAngle, endAngle, counterClockwise)
+        // We want to fill the sector between q1_min and q1_max.
+        // In Canvas coords:
+        // Angle 1: -q1_max
+        // Angle 2: -q1_min
+        // We draw from -q1_max to -q1_min (Counter-Clockwise in Canvas? No, -q1_max is numerically smaller? No.)
+        // Example: min=-45 (-0.78), max=+45 (+0.78).
+        // Canvas: Start (+0.78? No, -0.78), End (+0.78).
+        // Let's try drawing from -q1_max to -q1_min.
+
+        ctx.arc(origin.x, origin.y, 40, -q1_max, -q1_min, false);
+        ctx.lineTo(origin.x, origin.y);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fill();
+        // Draw Limit Lines
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.closePath();
+
+        // --- Joint 2 Limits (Elbow) ---
+        // Range: [q2_min, q2_max] relative to q1.
+        // World Absolute Angle of Link 2 range: q1 + q2_min to q1 + q2_max.
+        // Canvas Absolute Angle: -(q1 + q2_max) to -(q1 + q2_min).
+
+        const q2_min = limits.q2_min;
+        const q2_max = limits.q2_max;
+        const q1 = this.q[0]; // Current q1
+
+        const p1 = this.p; // Elbow position in pixels
+
+        ctx.beginPath();
+        ctx.moveTo(p1[0], p1[1]);
+        ctx.arc(p1[0], p1[1], 30, -(q1 + q2_max), -(q1 + q2_min), false);
+        ctx.lineTo(p1[0], p1[1]);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; // Reddish for limits
+        ctx.stroke();
+        ctx.closePath();
     }
 
     drawJoint(ctx, x, y, color = '#ffffff') {
