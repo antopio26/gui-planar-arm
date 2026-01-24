@@ -85,8 +85,21 @@ def trace_trajectory(q:tuple[list,list]):
 def py_log(msg):
     print(msg)
 
+def resolve_config(settings_override=None):
+    sizes = SIZES.copy()
+    limits = None # usage of imported JOINT_LIMITS is possible but we need to check if it's imported globally.
+    # It is imported in py_get_config only. 
+    # Let's import it here or trust that if settings_override is None we use defaults passed to functions
+    
+    if settings_override:
+        if 'l1' in settings_override: sizes['l1'] = float(settings_override['l1'])
+        if 'l2' in settings_override: sizes['l2'] = float(settings_override['l2'])
+        if 'limits' in settings_override: limits = settings_override['limits']
+        
+    return sizes, limits
+
 @eel.expose
-def py_get_data():
+def py_get_data(settings_override=None):
     try:
         data: list = eel.js_get_data()()
         if len(data) < 1: 
@@ -103,6 +116,10 @@ def py_get_data():
         q1s = []
         penups = []
         ts = []
+        
+        sizes, limits = resolve_config(settings_override)
+        print(f"Using Config: Sizes={sizes}, Limits={limits}")
+
         for patch in data: 
             (q0s_p, q1s_p, penups_p, ts_p) = tpy.slice_trj(
                 patch, 
@@ -110,7 +127,8 @@ def py_get_data():
                 max_acc=SETTINGS['max_acc'],
                 line=SETTINGS['line_tl'],
                 circle=SETTINGS['circle_tl'],
-                sizes=SIZES
+                sizes=sizes,
+                limits=limits
             )
             # Stitching logic
             q0s += q0s_p if len(q0s) == 0 else q0s_p[1:] 
@@ -349,7 +367,7 @@ def _apply_curved_transform(patches, radius, offset_angle):
     return transformed
 
 @eel.expose
-def py_generate_text(text, options):
+def py_generate_text(text, options, settings_override=None):
     print(f"Generating Text: '{text}' with options: {options}")
     try:
         if not text: return []
@@ -387,15 +405,17 @@ def py_generate_text(text, options):
         return []
 
 @eel.expose
-def py_validate_text(text, options):
+def py_validate_text(text, options, settings_override=None):
     # Generate the trajectory first
-    patches = py_generate_text(text, options)
+    patches = py_generate_text(text, options, settings_override)
     
     if not patches:
         return {'valid': True, 'message': 'Empty'}
 
     valid = True
     msg = "OK"
+    
+    sizes, limits = resolve_config(settings_override)
     
     # Check every point against IK or Workspace limits
     # We can use tpy.ik to check if a solution exists
@@ -405,22 +425,16 @@ def py_validate_text(text, options):
                 # Check if point is reachable
                 # tpy.ik returns numpy array of q1, q2
                 # If it raises error or returns NaNs (depends on implementation), it's invalid.
-                # Looking at tpy.ik (dk is imported), let's assume it might throw or we check bounds.
-                # Actually commonly verification is checking if point is within reach.
-                # R_min < dist < R_max
                 
                 x, y = p
-                dist = (x**2 + y**2)**0.5
                 
-                # Check simple radius bounds
-                l1 = SIZES['l1']
-                l2 = SIZES['l2']
-                max_reach = l1 + l2
-                min_reach = abs(l1 - l2)
+                # Check using updated IK with limits
+                # tpy.ik returns None if out of reach or limits violation
+                res = tpy.ik(x, y, 0, None, sizes, limits)
                 
-                if dist > max_reach * 0.99 or dist < min_reach * 1.01:
+                if res is None:
                     valid = False
-                    msg = "Point out of reach"
+                    msg = "Point out of reach or Limit violation"
                     break
                     
             except Exception as e:

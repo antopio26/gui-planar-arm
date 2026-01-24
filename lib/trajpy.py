@@ -317,7 +317,7 @@ def compose_cycloidal(q:list[float], ddqm:float = 1.05) -> list[tuple[list[funct
 @outputs: 
 - ndarray: column numpy array containing the values of the joint coordinates.
 @# """
-def ik(x:float, y:float, z:float = 0, theta:float = None, sizes:dict[float] = {'l1':0.170 ,'l2':0.158}) -> np.ndarray:
+def ik(x:float, y:float, z:float = 0, theta:float = None, sizes:dict[float] = {'l1':0.170 ,'l2':0.158}, limits:dict[float] = None) -> np.ndarray:
     if x**2+y**2 > (sizes['l1']+sizes['l2'])**2: return None
     q1 = 0
     q2 = 0
@@ -327,12 +327,57 @@ def ik(x:float, y:float, z:float = 0, theta:float = None, sizes:dict[float] = {'
 
     if theta is not None:
         cos_q2 = (x**2+y**2-sizes['l1']**2-sizes['l2']**2)/(2*sizes['l1']*sizes['l2'])
+        # Check domain for acos/sqrt
+        if abs(cos_q2) > 1.0001: return None # Unreachable
+        if cos_q2 > 1.0: cos_q2 = 1.0
+        if cos_q2 < -1.0: cos_q2 = -1.0
+        
         sin_q2 = sqrt(1-cos_q2**2)
+        # Check elbow up/down configuration?
+        # Standard solution typically picks one. 
+        # Existing code: q2 = atan2(sin_q2, cos_q2) => Positive q2 (Elbow Down in some conventions)
         q2 = atan2(sin_q2, cos_q2)
         q1 = theta-q2
     else:
-        q2 = acos((x**2+y**2-a1**2-a2**2)/(2*a1*a2))
+        # Cosine Rule
+        cos_q2 = (x**2+y**2-a1**2-a2**2)/(2*a1*a2)
+        if abs(cos_q2) > 1.0001: return None 
+        if cos_q2 > 1.0: cos_q2 = 1.0
+        if cos_q2 < -1.0: cos_q2 = -1.0
+        
+        q2 = acos(cos_q2)
+        # There are two solutions for q2: +/- acos(...)
+        # Standard: +q2
+        
         q1 = atan2(y,x)-atan2(a2*sin(q2), a1+a2*cos(q2))
+
+    
+    # Check Limits if provided
+    # Check Limits if provided
+    if limits:
+        # Check standard solution
+        valid_standard = (limits['q1_min'] <= q1 <= limits['q1_max']) and \
+                         (limits['q2_min'] <= q2 <= limits['q2_max'])
+        
+        if valid_standard:
+            pass # q/q1/q2 are good
+        else:
+            # Try Alternative Solution (Flip Elbow)
+            # q2_neg = -q2
+            # Recalculate q1 for q2_neg
+            
+            q2_neg = -q2
+            q1_neg = atan2(y,x)-atan2(a2*sin(q2_neg), a1+a2*cos(q2_neg))
+            
+            valid_alt = (limits['q1_min'] <= q1_neg <= limits['q1_max']) and \
+                        (limits['q2_min'] <= q2_neg <= limits['q2_max'])
+            
+            if valid_alt:
+                q1 = q1_neg
+                q2 = q2_neg
+            else:
+                # Neither solution works
+                return None
 
 
     q = np.array([[q1,q2,z]]).T
@@ -515,6 +560,7 @@ def slice_trj(patch: dict, **kargs):
         kargs['Tc'] = 1e-3
     if 'sizes' not in kargs:
         print('Using default sizes')
+    limits = kargs.get('limits', None)
     
     q0s = []
     q1s = []
@@ -544,8 +590,9 @@ def slice_trj(patch: dict, **kargs):
     if patch['data']['penup']:
         # if penup -> use a point-to-point trajectory (in this case: cycloidal)
         # patch['points'] -> [[x0, y0], [x1, y1]]
-        qt0 = list(ik(patch['points'][0][0], patch['points'][0][1], 1, None, kargs['sizes']).T[0])
-        qt1 = list(ik(patch['points'][1][0], patch['points'][1][1], 1, None, kargs['sizes']).T[0])
+        k_sz = kargs['sizes']
+        qt0 = list(ik(patch['points'][0][0], patch['points'][0][1], 1, None, k_sz, limits).T[0])
+        qt1 = list(ik(patch['points'][1][0], patch['points'][1][1], 1, None, k_sz, limits).T[0])
         (traj0, dt0) = cycloidal([qt0[0], qt1[0]], kargs['max_acc']*0.4, tf) # first motor
         (traj1, dt1) = cycloidal([qt0[1], qt1[1]], kargs['max_acc']*0.4, tf) # second motor
         for t in rangef(0, kargs['Tc'], tf):
@@ -569,7 +616,9 @@ def slice_trj(patch: dict, **kargs):
             ts.append(t)
 
     for p in points:
-        qt = list(ik(p.x, p.y, 0, None, kargs['sizes']).T[0]) # points converted to joint space
+        res = ik(p.x, p.y, 0, None, kargs['sizes'], limits)
+        if res is None: raise Exception(f"IK Failed for point {p}")
+        qt = list(res.T[0]) # points converted to joint space
         q0s.append(qt[0])
         q1s.append(qt[1])
         penups.append(0)

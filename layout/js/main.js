@@ -11,24 +11,6 @@ const state = appState;
 // Initialize State
 state.init(canvas.width, canvas.height);
 
-// Fetch Config from Backend and Update State
-API.getConfig().then(config => {
-    if (config) {
-        console.log("Config loaded from backend:", config);
-        if (config.sizes) {
-            state.settings.l1 = config.sizes.l1;
-            state.settings.l2 = config.sizes.l2;
-        }
-        if (config.limits) {
-            state.settings.limits = config.limits;
-        }
-        // Force redraw if needed, or it will happen on next animate frame
-    }
-});
-
-// Initialize Canvas Handler
-const canvasHandler = new CanvasHandler(canvas, state);
-
 // --- UI Elements ---
 
 const ui = {
@@ -52,8 +34,6 @@ const ui = {
     btnSend: document.getElementById('send-data-btn'),
     btnStop: document.getElementById('stop-traj-btn'),
     btnHoming: document.getElementById('homing-btn'),
-    btnStop: document.getElementById('stop-traj-btn'),
-    btnHoming: document.getElementById('homing-btn'),
     // btnDemo removed
 
 
@@ -69,6 +49,14 @@ const ui = {
     inputLinX: document.getElementById('lin-x'),
     inputLinY: document.getElementById('lin-y'),
     inputLinAngle: document.getElementById('lin-angle'),
+
+    // Robot Config Inputs
+    inputL1: document.getElementById('robot-l1'),
+    inputL2: document.getElementById('robot-l2'),
+    inputQ1Min: document.getElementById('limit-q1-min'),
+    inputQ1Max: document.getElementById('limit-q1-max'),
+    inputQ2Min: document.getElementById('limit-q2-min'),
+    inputQ2Max: document.getElementById('limit-q2-max'),
 
     // Workspace Config (Linear)
     inputWsX: document.getElementById('ws-x'),
@@ -87,6 +75,50 @@ const ui = {
     // btnNewline: document.getElementById('newline-btn'), // Removed
     btnClean: document.getElementById('clean-text-btn'),
 };
+
+// Fetch Config from Backend and Update State
+// Fetch Config from Backend and Update State
+API.getConfig().then(config => {
+    if (config) {
+        console.log("Config loaded from backend:", config);
+        if (config.sizes) {
+            state.settings.l1 = config.sizes.l1;
+            state.settings.l2 = config.sizes.l2;
+            if (ui.inputL1) ui.inputL1.value = config.sizes.l1;
+            if (ui.inputL2) ui.inputL2.value = config.sizes.l2;
+        }
+        if (config.limits) {
+            state.settings.limits = config.limits;
+            if (ui.inputQ1Min) ui.inputQ1Min.value = config.limits.q1_min;
+            if (ui.inputQ1Max) ui.inputQ1Max.value = config.limits.q1_max;
+            if (ui.inputQ2Min) ui.inputQ2Min.value = config.limits.q2_min;
+            if (ui.inputQ2Max) ui.inputQ2Max.value = config.limits.q2_max;
+        }
+        // Force redraw if needed, or it will happen on next animate frame
+    }
+});
+
+function updateRobotConfig() {
+    state.settings.l1 = parseFloat(ui.inputL1.value) || 0.170;
+    state.settings.l2 = parseFloat(ui.inputL2.value) || 0.158;
+
+    if (!state.settings.limits) state.settings.limits = {};
+    state.settings.limits.q1_min = parseFloat(ui.inputQ1Min.value) || -1.57;
+    state.settings.limits.q1_max = parseFloat(ui.inputQ1Max.value) || 1.57;
+    state.settings.limits.q2_min = parseFloat(ui.inputQ2Min.value) || -2.5;
+    state.settings.limits.q2_max = parseFloat(ui.inputQ2Max.value) || 2.5;
+
+    // Trigger canvas resize/recalc to update visuals (e.g. workspace sweep)
+    if (canvasHandler) canvasHandler.resize();
+    validateText();
+}
+
+[ui.inputL1, ui.inputL2, ui.inputQ1Min, ui.inputQ1Max, ui.inputQ2Min, ui.inputQ2Max].forEach(el => {
+    if (el) el.addEventListener('input', updateRobotConfig);
+});
+
+// Initialize Canvas Handler
+const canvasHandler = new CanvasHandler(canvas, state);
 
 // --- Mode Switcher Logic ---
 
@@ -202,7 +234,7 @@ ui.btnHoming.addEventListener('click', () => {
 });
 
 ui.btnSend.addEventListener('click', () => {
-    API.sendData();
+    API.sendData(state.settings);
     // Sending is triggered via Python callback -> js_get_data
 });
 
@@ -300,7 +332,7 @@ async function validateText() {
     }
 
     const options = getTextOptions();
-    const result = await API.validateText(text, options);
+    const result = await API.validateText(text, options, state.settings);
 
     if (result.valid) {
         ui.warningMsg.classList.add('hidden');
@@ -338,7 +370,7 @@ async function generatePreview() {
     console.log("Generating Preview for:", text); // Debug
 
     try {
-        const patches = await API.generateText(text, options);
+        const patches = await API.generateText(text, options, state.settings);
         console.log("Patches:", patches ? patches.length : 0);
 
         state.textPreview = patches || [];

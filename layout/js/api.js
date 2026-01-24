@@ -21,24 +21,20 @@ export const API = {
         await window.eel.py_homing_cmd()();
     },
 
-    async sendData(payload) {
-        // payload is passed via side-channel in original code?
-        // Original code: eel.py_get_data() calls js_get_data() callback.
-        // We need to maintain this flow or invert it.
-        // Current flow: Frontend calls py_get_data(), which calls js_get_data() synchronously/callback, 
-        // then Python processes the return value of js_get_data.
+    async sendData(settings) {
+        // settings: optional override for backend (limits, sizes)
         if (!window.eel) return;
-        await window.eel.py_get_data()();
+        await window.eel.py_get_data(settings)();
     },
 
-    async generateText(text, options) {
+    async generateText(text, options, settings) {
         if (!window.eel) return [];
-        return await window.eel.py_generate_text(text, options)();
+        return await window.eel.py_generate_text(text, options, settings)();
     },
 
-    async validateText(text, options) {
+    async validateText(text, options, settings) {
         if (!window.eel) return { valid: false, message: "API Error" };
-        return await window.eel.py_validate_text(text, options)();
+        return await window.eel.py_validate_text(text, options, settings)();
     },
 
     async clearState() {
