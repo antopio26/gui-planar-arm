@@ -246,7 +246,25 @@
 
         <!-- Main Canvas Area -->
         <main class="main-content">
-            <canvas id="input_canvas" width="700" height="700"></canvas>
+            <!-- Tabs Header -->
+            <div class="tabs-header">
+                <button class="tab-btn active" data-tab="cartesian">Cartesian Space</button>
+                <button class="tab-btn" data-tab="joint">Joint Space</button>
+                <button class="tab-btn" data-tab="trajectories">Trajectories</button>
+            </div>
+
+            <!-- Tab Content Containers -->
+            <div class="tab-content active" id="tab-cartesian">
+                <canvas id="input_canvas" width="700" height="700"></canvas>
+            </div>
+
+            <div class="tab-content" id="tab-joint">
+                <canvas id="joint_canvas" width="700" height="700"></canvas>
+            </div>
+
+            <div class="tab-content" id="tab-trajectories">
+                <div class="placeholder-msg">Trajectory Plotting Integration Pending...</div>
+            </div>
         </main>
     </div>
 </body>

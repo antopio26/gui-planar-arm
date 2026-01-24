@@ -174,6 +174,66 @@ def py_get_data(settings_override=None):
         print(traceback.format_exc())
 
 @eel.expose
+def py_compute_trajectory(settings_override=None):
+    """
+    Computes the trajectory in Joint Space (q1, q2) without sending it to serial.
+    Returns: { 'q1': [float], 'q2': [float], 'penups': [bool] } or None if error.
+    """
+    try:
+        data: list = eel.js_get_data()()
+        if len(data) < 1: 
+            return None # Not enough points
+
+        # We assume start from current position (or last known)
+        current_q = read_position_cartesian()
+        
+        # Add initial path from current position
+        data = [{'type':'line', 'points':[current_q, data[0]['points'][0]], 'data':{'penup':True}}] + data[::]
+        
+        # Stitch patches
+        q0s = []
+        q1s = []
+        penups = []
+        ts = []
+        
+        sizes, limits = resolve_config(settings_override)
+
+        # Simulation/Preview only -> Use internal state last know
+        current_joint_pos = state.last_known_q 
+        
+        for patch in data: 
+            (q0s_p, q1s_p, penups_p, ts_p) = tpy.slice_trj(
+                patch, 
+                Tc=SETTINGS['Tc'],
+                max_acc=SETTINGS['max_acc'],
+                line=SETTINGS['line_tl'],
+                circle=SETTINGS['circle_tl'],
+                sizes=sizes,
+                limits=limits,
+                initial_q=current_joint_pos
+            )
+            # Stitching logic
+            q0s += q0s_p if len(q0s) == 0 else q0s_p[1:] 
+            q1s += q1s_p if len(q1s) == 0 else q1s_p[1:]
+            penups += penups_p if len(penups) == 0 else penups_p[1:]
+            ts += [(t + ts[-1] if len(ts) > 0  else t) for t in (ts_p if len(ts) == 0 else ts_p[1:])]
+            
+            # Update seed for next patch
+            if len(q0s_p) > 0:
+                current_joint_pos = [q0s_p[-1], q1s_p[-1]]
+
+        return {
+            'q1': q0s,
+            'q2': q1s,
+            'penups': penups
+        }
+
+    except Exception as e:
+        print(f"Error in py_compute_trajectory: {e}")
+        traceback.print_exc()
+        return None
+
+@eel.expose
 def py_stop_trajectory():
     print("Received STOP request from UI")
     state.stop_requested = True

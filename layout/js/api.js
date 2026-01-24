@@ -47,6 +47,11 @@ export const API = {
         return await window.eel.py_stop_trajectory()();
     },
 
+    async computeTrajectory(settings) {
+        if (!window.eel) return null;
+        return await window.eel.py_compute_trajectory(settings)();
+    },
+
     async getConfig() {
         if (!window.eel) return null;
         return await window.eel.py_get_config()();

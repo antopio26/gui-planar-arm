@@ -2,14 +2,20 @@ import { appState, TOOLS } from './state.js';
 import { CanvasHandler } from './canvas.js';
 import { Point } from './utils.js';
 import { API } from './api.js';
+import { TabManager } from './tabs.js';
+import { JointSpaceVisualizer } from './joint_space_visualizer.js';
 
 // --- Initialization ---
 
 const canvas = document.getElementById('input_canvas');
+const jointCanvas = document.getElementById('joint_canvas');
 const state = appState;
 
 // Initialize State
 state.init(canvas.width, canvas.height);
+
+// Initialize Tab Manager
+const tabManager = new TabManager();
 
 // --- UI Elements ---
 
@@ -118,6 +124,7 @@ function updateRobotConfig() {
 
     // Trigger canvas resize/recalc to update visuals (e.g. workspace sweep)
     if (canvasHandler) canvasHandler.resize();
+    if (jointVisualizer) jointVisualizer.resize();
     validateText();
 }
 
@@ -127,6 +134,7 @@ function updateRobotConfig() {
 
 // Initialize Canvas Handler
 const canvasHandler = new CanvasHandler(canvas, state);
+const jointVisualizer = new JointSpaceVisualizer(jointCanvas, state);
 
 // --- Mode Switcher Logic ---
 
@@ -142,7 +150,10 @@ function setMajorMode(mode) {
     state.sentTrajectory.reset();
     state.textPreview = [];
     state.generatedTextPatches = [];
-    // Optionally stop backend if needed? API.stopTrajectory();
+    jointVisualizer.setTrajectoryData({ q1: [], q2: [] }, []);
+
+    // Partially stop backend if needed, but not full stop
+    // API.stopTrajectory();
 
     state.majorMode = mode;
     // Update Buttons
@@ -233,6 +244,8 @@ ui.btnClearCanvas.addEventListener('click', async () => {
 
     state.textPreview = [];
     state.generatedTextPatches = [];
+    jointVisualizer.setTrajectoryData([], []);
+
     ui.warningMsg.classList.add('hidden');
 });
 
@@ -387,6 +400,7 @@ async function generatePreview() {
     if (!text) {
         state.textPreview = [];
         state.generatedTextPatches = [];
+        jointVisualizer.setTrajectoryData({ q1: [], q2: [] });
         validateText(); // Will hide warning
         return;
     }
@@ -434,6 +448,14 @@ async function generatePreview() {
                     });
                 }
             });
+
+            // --- Update Joint Space Preview ---
+            // Now that state.trajectory is populated, we can compute the joint path
+            const jointData = await API.computeTrajectory(state.settings);
+            if (jointData) {
+                console.log("Computed Joint Path:", jointData.q1.length, "points");
+                jointVisualizer.setTrajectoryData(jointData.q1, jointData.q2);
+            }
         }
 
         validateText(); // Validate the result
@@ -448,7 +470,7 @@ ui.inputText.addEventListener('input', () => {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
         generatePreview();
-    }, 100); // 100ms delay
+    }, 500); // Increased debounce to 500ms to avoid overloading backend with IK
 });
 
 // Update on other parameter changes too
@@ -457,7 +479,7 @@ ui.inputText.addEventListener('input', () => {
         el.addEventListener('input', () => {
             // Debounce less critical here? Or same.
             clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(generatePreview, 100);
+            debounceTimer = setTimeout(generatePreview, 500);
         });
     }
 });
@@ -476,6 +498,7 @@ ui.btnClean.addEventListener('click', async () => {
     state.resetDrawing();
     state.sentPoints = [];
     state.sentTrajectory.reset();
+    jointVisualizer.setTrajectoryData({ q1: [], q2: [] }, []);
 
     // Clear Backend State
     await API.stopTrajectory();
