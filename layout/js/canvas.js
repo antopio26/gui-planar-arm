@@ -28,13 +28,22 @@ export class CanvasHandler {
 
     resize() {
         const parent = this.canvas.parentElement;
-        const width = parent.clientWidth;
-        const height = parent.clientHeight;
+        // Basic check to avoid 0 size
+        const width = Math.max(parent.clientWidth, 600);
+        const height = Math.max(parent.clientHeight, 600);
 
         // Canvas element size (fit container with small margin)
         const size = Math.min(width, height) - 20;
 
         const dpr = window.devicePixelRatio || 1;
+
+        // Prevent unnecessary resize if dimensions match
+        if (this.canvas.width === size * dpr && this.canvas.height === size * dpr) {
+            // Just update internals in case config changed
+            // But don't reset ctx scale
+            this.recalcScale(size);
+            return;
+        }
 
         this.canvas.width = size * dpr;
         this.canvas.height = size * dpr;
@@ -44,6 +53,10 @@ export class CanvasHandler {
         this.canvas.style.width = size + 'px';
         this.canvas.style.height = size + 'px';
 
+        this.recalcScale(size);
+    }
+
+    recalcScale(size) {
         // Internal Padding Logic
         const padding = 40; // Internal padding in pixels
         const usableSize = size - (padding * 2);
@@ -54,7 +67,11 @@ export class CanvasHandler {
         this.state.settings.origin.y = size / 2;
 
         // Scale: Robot diameter (0.328 * 2) -> Usable Diameter
-        this.state.settings.m_p = (0.328 * 2) / usableSize;
+        // Use max reach to determine scale (l1 + l2)
+        // Default L1+L2 approx 0.35m. Diameter 0.7m.
+        // Let's use a safe bounding box.
+        const maxReach = (this.state.settings.l1 + this.state.settings.l2) * 1.1; // +10% padding
+        this.state.settings.m_p = (maxReach * 2) / usableSize;
 
         // Store visual radius for drawing
         this.workspaceRadius = radius;
@@ -255,12 +272,16 @@ export class CanvasHandler {
             const outerR_m_limit = 0.328;
             const mp_limit = this.state.settings.m_p;
 
-            ctx.arc(origin.x, origin.y, outerR_m_limit / mp_limit, 0, 2 * Math.PI);
+            // Normalize radius to be positive
+            const r_out = Math.abs(outerR_m_limit / mp_limit);
+            const r_in = Math.abs(innerR_m_limit / mp_limit);
+
+            ctx.arc(origin.x, origin.y, r_out, 0, 2 * Math.PI);
             ctx.strokeStyle = '#333';
             ctx.stroke();
 
             ctx.beginPath();
-            ctx.arc(origin.x, origin.y, innerR_m_limit / mp_limit, 0, 2 * Math.PI);
+            ctx.arc(origin.x, origin.y, r_in, 0, 2 * Math.PI);
             ctx.strokeStyle = '#333';
             ctx.setLineDash([5, 5]);
             ctx.stroke();

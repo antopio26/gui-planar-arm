@@ -17,11 +17,13 @@ export class JointSpaceVisualizer {
 
     resize() {
         const parent = this.canvas.parentElement;
-        const width = parent.clientWidth || 700;
-        const height = parent.clientHeight || 700;
+        const width = Math.max(parent.clientWidth, 600);
+        const height = Math.max(parent.clientHeight, 600);
 
         const size = Math.min(width, height) - 20;
         const dpr = window.devicePixelRatio || 1;
+
+        if (this.canvas.width === size * dpr && this.canvas.height === size * dpr) return;
 
         this.canvas.width = size * dpr;
         this.canvas.height = size * dpr;
