@@ -48,6 +48,14 @@ export class JointSpaceVisualizer {
             console.warn("Invalid trace point received:", q1, q2);
             return;
         }
+        // Filter stationary points to save buffer space
+        if (this.traceData.q1.length > 0) {
+            const lastQ1 = this.traceData.q1[this.traceData.q1.length - 1];
+            const lastQ2 = this.traceData.q2[this.traceData.q2.length - 1];
+            const diff = Math.abs(q1 - lastQ1) + Math.abs(q2 - lastQ2);
+            if (diff < 0.001) return; // Ignore if movement is negligible
+        }
+
         this.traceData.q1.push(q1);
         this.traceData.q2.push(q2);
         // Store pen state in separate array (or struct, but let's add array)
@@ -55,7 +63,7 @@ export class JointSpaceVisualizer {
         this.traceData.pen.push(penState);
 
         // Limit trace size to avoid performance issues
-        if (this.traceData.q1.length > 5000) {
+        if (this.traceData.q1.length > 20000) {
             this.traceData.q1.shift();
             this.traceData.q2.shift();
             this.traceData.pen.shift();

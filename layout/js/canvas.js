@@ -98,6 +98,9 @@ export class CanvasHandler {
 
         console.log(`handleClick: (${x.toFixed(1)}, ${y.toFixed(1)}) Tool: ${this.state.tool} Points: ${this.state.points.length}`);
 
+        // Disable drawing in Text Mode
+        if (this.state.majorMode === 'text') return;
+
         // Radius check (workspace limit)
         const distSq = Math.pow(x - settings.origin.x, 2) + Math.pow(y - settings.origin.y, 2);
         const maxRadius = this.workspaceRadius || (this.canvas.height / 2); // Fallback
@@ -371,7 +374,11 @@ export class CanvasHandler {
         // Wait, "show that only when the first point... is drawn" refers to the DASHED line?
         // "leave the dash line on the canvas" (persisting).
         // "do not show the preview dashed line" (elastic band).
+        // "do not show the preview dashed line" (elastic band).
         if (this.state.penUp) return;
+
+        // Disable tool preview ( ghosts ) in Text Mode
+        if (this.state.majorMode === 'text') return;
 
         // Draw Text Preview (Generated)
         if (this.state.textPreview && this.state.textPreview.length > 0) {
