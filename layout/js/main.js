@@ -70,6 +70,14 @@ const ui = {
 
 
 
+    // Viz Controls
+    btnToggleFrames: document.getElementById('viz-toggle-frames'),
+    btnToggleLimits: document.getElementById('viz-toggle-limits'),
+    monQ1: document.getElementById('mon-q1'),
+    monQ2: document.getElementById('mon-q2'),
+    monX: document.getElementById('mon-x'),
+    monY: document.getElementById('mon-y'),
+
     warningMsg: document.getElementById('text-warning'),
     // btnGenerate: document.getElementById('generate-text-btn'), // Removed
     // btnNewline: document.getElementById('newline-btn'), // Removed
@@ -267,6 +275,23 @@ function getTextOptions() {
 
 ui.btnModeLinear.addEventListener('click', () => setTextMode('linear'));
 ui.btnModeCurved.addEventListener('click', () => setTextMode('curved'));
+
+// Viz Toggles
+ui.btnToggleFrames.addEventListener('click', () => {
+    state.settings.showFrames = !state.settings.showFrames;
+    ui.btnToggleFrames.classList.toggle('active', state.settings.showFrames);
+    ui.btnToggleFrames.textContent = `Frames: ${state.settings.showFrames ? 'ON' : 'OFF'}`;
+    // Force redraw
+    // Animation loop handles it
+});
+
+ui.btnToggleLimits.addEventListener('click', () => {
+    state.settings.showLimits = !state.settings.showLimits;
+    ui.btnToggleLimits.classList.toggle('active', state.settings.showLimits);
+    ui.btnToggleLimits.textContent = `Limits: ${state.settings.showLimits ? 'ON' : 'OFF'}`;
+    // Force redraw
+    // Animation loop handles it
+});
 
 function setTextMode(mode) {
     state.textMode = mode;
@@ -501,7 +526,25 @@ API.initCallbacks({
     },
 
     onDrawPose: (q) => {
-        if (state.manipulator) state.manipulator.q = q;
+        if (state.manipulator) {
+            state.manipulator.q = q;
+
+            // Update Monitor
+            if (ui.monQ1) ui.monQ1.value = q[0].toFixed(2);
+            if (ui.monQ2) ui.monQ2.value = q[1].toFixed(2);
+
+            // Calculate End Effector Position (relative to origin, not pixels)
+            // state.manipulator.end_eff gives pixels.
+            // We want real world coords.
+            // Forward Kinematics simple:
+            const l1 = state.settings.l1;
+            const l2 = state.settings.l2;
+            const x = l1 * Math.cos(q[0]) + l2 * Math.cos(q[0] + q[1]);
+            const y = l1 * Math.sin(q[0]) + l2 * Math.sin(q[0] + q[1]);
+
+            if (ui.monX) ui.monX.value = x.toFixed(3);
+            if (ui.monY) ui.monY.value = y.toFixed(3);
+        }
     },
 
     onDrawTraces: (points) => {

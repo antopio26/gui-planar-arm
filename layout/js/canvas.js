@@ -464,7 +464,9 @@ export class CanvasHandler {
 
         // Draw Manipulator
         if (this.state.manipulator) {
-            this.state.manipulator.draw_pose(ctx);
+            // Check Pen State (inverse of penUp)
+            const isPenDown = !this.state.penUp;
+            this.state.manipulator.draw_pose(ctx, isPenDown);
             // this.state.manipulator.draw_traces(ctx); // Performance heavy
         }
 

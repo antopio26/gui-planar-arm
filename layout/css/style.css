@@ -295,6 +295,17 @@ input[type=number] {
     gap: 4px;
 }
 
+.mini-input-group.indicators {
+    input {
+        opacity: 60%;
+        /*
+        border-color: var(--accent-color);
+        background-color: var(--accent-dim);
+        color: var(--accent-color);
+        */
+    }
+}
+
 .input-label-sm {
     color: #888;
     font-size: 0.8rem;

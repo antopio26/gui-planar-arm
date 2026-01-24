@@ -6,6 +6,10 @@ export class Manipulator {
         this.settings = settings;
         this.traces = { 'x1': [], 'x2': [] };
 
+        // Default Viz Settings if not present
+        if (this.settings.showFrames === undefined) this.settings.showFrames = false;
+        if (this.settings.showLimits === undefined) this.settings.showLimits = true;
+
         // Calculate initial position
         const [p1, p2] = this.dk(q);
         this.p = p1;
@@ -82,11 +86,13 @@ export class Manipulator {
 
     // --- Drawing ---
 
-    draw_pose(ctx) {
+    draw_pose(ctx, penDown = true) {
         const origin = this.settings['origin'];
 
         // Draw Joint Limits (Wedges)
-        this.drawJointLimits(ctx, origin);
+        if (this.settings.showLimits) {
+            this.drawJointLimits(ctx, origin);
+        }
 
         ctx.beginPath();
         ctx.lineWidth = 4;
@@ -107,7 +113,59 @@ export class Manipulator {
         // Draw Joints
         this.drawJoint(ctx, origin.x, origin.y);
         this.drawJoint(ctx, this.p[0], this.p[1]);
-        this.drawJoint(ctx, this.end_eff[0], this.end_eff[1], '#00e5ff'); // Distinguish end effector
+
+        // End Effector Color based on Pen State
+        // Passed as argument or fallback
+        const eeColor = penDown ? '#00e5ff' : '#ffea00'; // Cyan (Down) vs Yellow (Up/Move)? 
+        // Or Cyan (Down) vs Orange (Up)? 
+        // Let's use accent color for Down (Drawing) and maybe Orange/Yellow for Up.
+
+        this.drawJoint(ctx, this.end_eff[0], this.end_eff[1], eeColor);
+
+        // Draw Frames
+        if (this.settings.showFrames) {
+            // Base Frame (0)
+            this.drawFrame(ctx, origin.x, origin.y, 0);
+
+            // Joint 1 Frame (Rotated by q1)
+            // Note: Canvas angles are inverted (CW positive). q1 is CCW. So -q1.
+            const q1 = this.q[0];
+            this.drawFrame(ctx, this.p[0], this.p[1], -q1);
+
+            // End Effector Frame (Rotated by q1+q2)
+            const q2 = this.q[1];
+            this.drawFrame(ctx, this.end_eff[0], this.end_eff[1], -(q1 + q2));
+        }
+    }
+
+    drawFrame(ctx, x, y, angle) {
+        const axisLen = 30;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+
+        ctx.lineWidth = 2;
+
+        // X Axis (Red)
+        ctx.beginPath();
+        ctx.strokeStyle = '#ff4444';
+        ctx.moveTo(0, 0);
+        ctx.lineTo(axisLen, 0);
+        ctx.stroke();
+
+        // Y Axis (Green)
+        // Y is Down in Canvas, but Up in World. 
+        // If we want it to look like standard frame where Y is CCW 90 from X:
+        // In Canvas (Y down), X right. 
+        // CCW 90 degrees in World = -90 in Canvas.
+        ctx.beginPath();
+        ctx.strokeStyle = '#00C851';
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -axisLen);
+        ctx.stroke();
+
+        ctx.restore();
     }
 
     drawJointLimits(ctx, origin) {
