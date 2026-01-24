@@ -323,6 +323,7 @@ ui.btnHoming.addEventListener('click', () => {
 ui.btnSend.addEventListener('click', async () => {
     // Clear the ghost trace in Joint Space visualization for the new run
     // Moved to START to persist the trace after execution (until next run)
+    if (state.manipulator) state.manipulator.reset_trace();
     if (jointVisualizer) jointVisualizer.clearTrace();
     if (timeVisualizer) timeVisualizer.clearTrace();
 
