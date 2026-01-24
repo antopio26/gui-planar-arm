@@ -15,7 +15,7 @@ const state = appState;
 state.init(canvas.width, canvas.height);
 
 // Initialize Tab Manager
-const tabManager = new TabManager();
+// Moved to bottom with callback
 
 // --- UI Elements ---
 
@@ -123,9 +123,20 @@ function updateRobotConfig() {
     state.settings.limits.q2_max = parseFloat(ui.inputQ2Max.value) || 2.5;
 
     // Trigger canvas resize/recalc to update visuals (e.g. workspace sweep)
+    // Defer resize slightly to allow layout to settle if needed, or double call it.
     if (canvasHandler) canvasHandler.resize();
     if (jointVisualizer) jointVisualizer.resize();
     validateText();
+
+    // Debounced Backend Update to prevent flooding
+    // But for size changes, we want it relatively soon?
+    // Let's just call it.
+    // Assuming API.updateConfig exists or we add it. 
+    // Actually, we don't have a specific updateConfig in API yet typically.
+    // We usually send it with trajectory generation.
+    // But if we want the backend to know about it for "Homing" or other ops:
+    // We should probably check if we can send it.
+    // For now, at least the frontend state is updated.
 }
 
 [ui.inputL1, ui.inputL2, ui.inputQ1Min, ui.inputQ1Max, ui.inputQ2Min, ui.inputQ2Max].forEach(el => {
@@ -137,6 +148,18 @@ const canvasHandler = new CanvasHandler(canvas, state);
 const jointVisualizer = new JointSpaceVisualizer(jointCanvas, state);
 
 // --- Mode Switcher Logic ---
+
+const tabManager = new TabManager((activeTab) => {
+    // Force resize of the active visualizer when tab changes
+    // because display:none -> display:block can mess up dimensions initially
+    requestAnimationFrame(() => {
+        if (activeTab === 'cartesian') {
+            canvasHandler.resize();
+        } else if (activeTab === 'joint') {
+            jointVisualizer.resize();
+        }
+    });
+});
 
 ui.btnMainDrawing.addEventListener('click', () => setMajorMode('drawing'));
 ui.btnMainText.addEventListener('click', () => setMajorMode('text'));
@@ -254,8 +277,9 @@ ui.btnHoming.addEventListener('click', () => {
     API.homing();
 });
 
-ui.btnSend.addEventListener('click', () => {
-    API.sendData(state.settings);
+ui.btnSend.addEventListener('click', async () => {
+    // Pass current settings to backend to avoid "jumps" if config changed
+    await API.sendData(state.settings);
     // Sending is triggered via Python callback -> js_get_data
 });
 

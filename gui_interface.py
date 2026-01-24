@@ -102,38 +102,57 @@ def resolve_config(settings_override=None):
 @eel.expose
 def py_get_data(settings_override=None):
     try:
-        data: list = eel.js_get_data()()
-        if len(data) < 1: 
-            raise Exception("Not Enough Points to build a Trajectory")
-            
-        current_q = read_position_cartesian()
-        print(f"Start Point: {current_q}")
-        
-        # Add initial path from current position
-        data = [{'type':'line', 'points':[current_q, data[0]['points'][0]], 'data':{'penup':True}}] + data[::]
-        
-        # Stitch patches
-        q0s = []
-        q1s = []
-        penups = []
-        ts = []
-        
-        sizes, limits = resolve_config(settings_override)
-        print(f"Using Config: Sizes={sizes}, Limits={limits}")
+        # Use settings override if provided, otherwise defaults
+        current_sizes = SIZES.copy() # Start with default SIZES
+        current_limits = None # Start with no limits, or default limits if available globally
 
-        # Use current robot position as starting seed for continuity
-        # state.last_known_q is [q1, q2]
-        current_joint_pos = state.last_known_q 
+        if settings_override:
+            if 'l1' in settings_override: current_sizes['l1'] = float(settings_override['l1'])
+            if 'l2' in settings_override: current_sizes['l2'] = float(settings_override['l2'])
+            if 'limits' in settings_override:
+                 l = settings_override['limits']
+                 current_limits = {
+                     'q1_min': float(l['q1_min']), 'q1_max': float(l['q1_max']),
+                     'q2_min': float(l['q2_min']), 'q2_max': float(l['q2_max'])
+                 }
+
+        # Retrieve Data from JS
+        data_points = eel.js_get_data()() 
+        if not data_points:
+            print("No data received from JS")
+            return
+
+        # Generate Trajectory
+        q0s, q1s, penups, ts = [], [], [], []
         
-        for patch in data: 
+        # We need start configuration. 
+        # If we have a last known Q, use it. Otherwise use homing/zero.
+        current_joint_pos = state.last_known_q if state.last_known_q else [0, 0]
+
+        # Add initial path from current position to the first point in data_points
+        # This ensures continuity from the robot's current position
+        if data_points and len(data_points[0]['points']) > 0:
+            current_cartesian_pos = read_position_cartesian()
+            first_target_cartesian_pos = data_points[0]['points'][0]
+            
+            # Create a line segment from current position to the first point
+            initial_path_segment = {
+                'type': 'line', 
+                'points': [current_cartesian_pos, first_target_cartesian_pos], 
+                'data': {'penup': True} # Usually pen up for initial move
+            }
+            data_points = [initial_path_segment] + data_points
+
+        for patch in data_points:
+            # We must use slice_trj with the correct sizes/limits
             (q0s_p, q1s_p, penups_p, ts_p) = tpy.slice_trj(
                 patch, 
                 Tc=SETTINGS['Tc'],
                 max_acc=SETTINGS['max_acc'],
                 line=SETTINGS['line_tl'],
                 circle=SETTINGS['circle_tl'],
-                sizes=sizes,
-                limits=limits,
+                sizes=current_sizes,
+                limits=current_limits,
                 initial_q=current_joint_pos
             )
             # Stitching logic
@@ -161,17 +180,12 @@ def py_get_data(settings_override=None):
         
         trace_trajectory(q)
         
-        # DEBUG PLOTS
-        plotting.debug_plot(q[0], 'q1')
-        plotting.debug_plot(dq[0], 'dq1')
-        plotting.debug_plot(ddq[0], 'ddq1')
-        plotting.debug_plot(q[1], 'q2')
-        plotting.debug_plot(dq[1], 'dq2')
-        plotting.debug_plot(ddq[1], 'ddq2')
-
+        # DEBUG Plots (Optional, can comment out if slow)
+        # plotting.debug_plot(q[0], 'q1')
+        
     except Exception as e:
         print(f"Error in py_get_data: {e}")
-        print(traceback.format_exc())
+        traceback.print_exc()
 
 @eel.expose
 def py_compute_trajectory(settings_override=None):

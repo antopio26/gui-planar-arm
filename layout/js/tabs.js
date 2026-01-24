@@ -1,8 +1,9 @@
 export class TabManager {
-    constructor() {
+    constructor(onChange) {
         this.tabs = document.querySelectorAll('.tab-btn');
         this.contents = document.querySelectorAll('.tab-content');
         this.activeTab = 'cartesian';
+        this.onChange = onChange; // Callback function
 
         this.init();
     }
@@ -31,5 +32,8 @@ export class TabManager {
 
         this.activeTab = tabId;
         console.log(`Switched to tab: ${tabId}`);
+
+        // Trigger callback if defined
+        if (this.onChange) this.onChange(tabId);
     }
 }

@@ -28,19 +28,18 @@ export class CanvasHandler {
 
     resize() {
         const parent = this.canvas.parentElement;
-        // Basic check to avoid 0 size
-        const width = Math.max(parent.clientWidth, 600);
-        const height = Math.max(parent.clientHeight, 600);
+        // With flex layout, clientWidth/Height should be the full available space
+        const width = parent.clientWidth;
+        const height = parent.clientHeight;
 
         // Canvas element size (fit container with small margin)
-        const size = Math.min(width, height) - 20;
+        // Ensure strictly square to avoid distortion
+        // Prevent negative size if container is collapsed
+        const size = Math.max(100, Math.min(width, height) - 20);
 
         const dpr = window.devicePixelRatio || 1;
 
-        // Prevent unnecessary resize if dimensions match
         if (this.canvas.width === size * dpr && this.canvas.height === size * dpr) {
-            // Just update internals in case config changed
-            // But don't reset ctx scale
             this.recalcScale(size);
             return;
         }
@@ -59,7 +58,7 @@ export class CanvasHandler {
     recalcScale(size) {
         // Internal Padding Logic
         const padding = 40; // Internal padding in pixels
-        const usableSize = size - (padding * 2);
+        const usableSize = Math.max(10, size - (padding * 2)); // Prevent zero/neg
         const radius = usableSize / 2;
 
         // Update Origin to center

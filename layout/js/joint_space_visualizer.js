@@ -9,6 +9,8 @@ export class JointSpaceVisualizer {
         this.trajectoryData = null; // { q1: [], q2: [] } (Planned)
         this.traceData = { q1: [], q2: [] }; // (Executed/Real-time)
 
+        // Try to resize immediately, but if hidden it might be 0.
+        // The TabManager will trigger another resize when shown.
         this.resize();
         window.addEventListener('resize', () => this.resize());
 
@@ -17,10 +19,10 @@ export class JointSpaceVisualizer {
 
     resize() {
         const parent = this.canvas.parentElement;
-        const width = Math.max(parent.clientWidth, 600);
-        const height = Math.max(parent.clientHeight, 600);
+        const width = parent.clientWidth;
+        const height = parent.clientHeight;
 
-        const size = Math.min(width, height) - 20;
+        const size = Math.max(100, Math.min(width, height) - 20); // Minimum size guard
         const dpr = window.devicePixelRatio || 1;
 
         if (this.canvas.width === size * dpr && this.canvas.height === size * dpr) return;
@@ -33,8 +35,8 @@ export class JointSpaceVisualizer {
         this.canvas.style.height = size + 'px';
 
         this.padding = 60;
-        this.graphWidth = size - this.padding * 2;
-        this.graphHeight = size - this.padding * 2;
+        this.graphWidth = Math.max(10, size - this.padding * 2);
+        this.graphHeight = Math.max(10, size - this.padding * 2);
     }
 
     setTrajectoryData(q1s, q2s) {
