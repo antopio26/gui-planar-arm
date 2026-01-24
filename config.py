@@ -37,8 +37,8 @@ WEB_OPTIONS = {
 TEXT_OPTIONS = {
     'mode': 'linear',
     'fontSize': 0.04, # Slightly smaller for safety
-    'x': 0.15,
-    'y': 0.15,
+    'x': 0.22,
+    'y': 0.17,
     'angle': -90,
     'radius': 0.20,
     'offset': 90

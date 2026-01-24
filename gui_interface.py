@@ -12,6 +12,7 @@ from lib import serial_com as scm
 from lib import binary_protocol as bp
 from lib import char_gen
 from lib import transform
+from handlers import trajectory_handler as traj_handler
 import plotting
 
 # --- INTERNAL HELPER FUNCTIONS ---
@@ -37,40 +38,7 @@ def read_position_cartesian(sizes=None) -> list[float]:
     points = tpy.dk(np.array(q_actual), sizes)
     return [points[0,0], points[1,0]]
 
-def validate_trajectory_dynamics(q, dq, ddq):
-    print("\n--- TRAJECTORY VALIDATION ---")
-    MAX_ACC_RAD = SETTINGS['max_acc'] * MAX_ACC_TOLERANCE_FACTOR
-    
-    valid = True
-    
-    # 1. Check Limits
-    max_v = 0.0
-    max_a = 0.0
-    
-    for i in range(len(dq[0])):
-        v0 = abs(dq[0][i])
-        v1 = abs(dq[1][i])
-        a0 = abs(ddq[0][i])
-        a1 = abs(ddq[1][i])
-        
-        max_v = max(max_v, v0, v1)
-        max_a = max(max_a, a0, a1)
-        
-        if v0 > MAX_SPEED_RAD or v1 > MAX_SPEED_RAD:
-            print(f"[!] VELOCITY VIOLATION at index {i}: {max(v0,v1):.2f} rad/s > {MAX_SPEED_RAD}")
-            valid = False
-        if a0 > MAX_ACC_RAD or a1 > MAX_ACC_RAD:
-            print(f"[!] ACCELERATION VIOLATION at index {i}: {max(a0,a1):.2f} rad/s^2 > {MAX_ACC_RAD}")
-            valid = False
-            
-    print(f"Stats: Max Vel={max_v:.2f}, Max Acc={max_a:.2f}")
-    
-    if not valid:
-        print("!!! TRAJECTORY UNSAFE - ABORTING SUGGESTED !!!")
-    else:
-        print("Trajectory Dynamics: OK")
-
-    return valid
+# Removed validate_trajectory_dynamics (Moved to handlers)
 
 def resolve_config(settings_override=None):
     sizes = SIZES.copy()
@@ -83,35 +51,7 @@ def resolve_config(settings_override=None):
         
     return sizes, limits
 
-def _generate_trajectory_data(data_points, current_sizes, current_limits, current_joint_pos):
-    """
-    Common logic to stitch trajectory patches into full joint lists.
-    Returns: (q0s, q1s, penups, ts, last_joint_pos)
-    """
-    q0s, q1s, penups, ts = [], [], [], []
-    
-    for patch in data_points:
-        (q0s_p, q1s_p, penups_p, ts_p) = tpy.slice_trj(
-            patch, 
-            Tc=SETTINGS['Tc'],
-            max_acc=SETTINGS['max_acc'],
-            line=SETTINGS['line_tl'],
-            circle=SETTINGS['circle_tl'],
-            sizes=current_sizes,
-            limits=current_limits,
-            initial_q=current_joint_pos
-        )
-        # Stitching logic
-        q0s += q0s_p if len(q0s) == 0 else q0s_p[1:] 
-        q1s += q1s_p if len(q1s) == 0 else q1s_p[1:]
-        penups += penups_p if len(penups) == 0 else penups_p[1:]
-        ts += [(t + ts[-1] if len(ts) > 0  else t) for t in (ts_p if len(ts) == 0 else ts_p[1:])]
-        
-        # Update seed for next patch
-        if len(q0s_p) > 0:
-            current_joint_pos = [q0s_p[-1], q1s_p[-1]]
-            
-    return q0s, q1s, penups, ts, current_joint_pos
+# Removed _generate_trajectory_data (Moved to handlers)
 
 
 # --- EEL EXPOSED FUNCTIONS ---
@@ -254,8 +194,8 @@ def py_compute_trajectory(settings_override=None):
         if len(data) > 0:
              data = [{'type':'line', 'points':[current_q, data[0]['points'][0]], 'data':{'penup':True}}] + data[::]
         
-        # Use internal helper
-        q0s, q1s, penups, ts, _ = _generate_trajectory_data(data, sizes, limits, state.last_known_q)
+        # Use internal helper via handler
+        q0s, q1s, penups, ts, _ = traj_handler.generate_trajectory_data(data, sizes, limits, state.last_known_q)
 
         return {
             'q1': q0s,
@@ -294,13 +234,13 @@ def py_get_data(settings_override=None):
             data_points = [initial_segment] + data_points
 
         # Generate Full Trajectory
-        q0s, q1s, penups, ts, last_q = _generate_trajectory_data(data_points, sizes, limits, current_joint_pos)
+        q0s, q1s, penups, ts, last_q = traj_handler.generate_trajectory_data(data_points, sizes, limits, current_joint_pos)
 
         q = (q0s, q1s, penups)
         dq = (tpy.find_velocities(q[0], ts), tpy.find_velocities(q[1], ts))
         ddq = (tpy.find_accelerations(dq[0], ts), tpy.find_accelerations(dq[1], ts))
         
-        if not validate_trajectory_dynamics(q, dq, ddq):
+        if not traj_handler.validate_trajectory_dynamics(q, dq, ddq):
             raise Exception("Trajectory Validation Failed: Safety limit exceeded.")
             
         state.stop_requested = False 

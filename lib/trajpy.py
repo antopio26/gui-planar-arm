@@ -366,9 +366,11 @@ def ik(x:float, y:float, z:float = 0, theta:float = None, sizes:dict[float] = {'
 
     # 3. Filter by Limits
     valid_solutions = []
+    TOL = 1e-4 # Small tolerance for floating point boundary issues
     if limits:
         for (q1, q2) in solutions:
-            if (limits['q1_min'] <= q1 <= limits['q1_max']) and (limits['q2_min'] <= q2 <= limits['q2_max']):
+            if (limits['q1_min'] - TOL <= q1 <= limits['q1_max'] + TOL) and \
+               (limits['q2_min'] - TOL <= q2 <= limits['q2_max'] + TOL):
                 valid_solutions.append((q1, q2))
     else:
         valid_solutions = solutions
@@ -650,6 +652,25 @@ def slice_trj(patch: dict, **kargs):
         res = ik(p.x, p.y, 0, None, kargs['sizes'], limits, seed_q=q_prev)
         if res is None: raise Exception(f"IK Failed for point {p}")
         qt = list(res.T[0]) # points converted to joint space
+        
+        # DEBUG: Check for jumps within the loop
+        if q_prev is not None and isinstance(q_prev, np.ndarray):
+             q_prev_list = list(q_prev.T[0])
+             dist = (qt[0]-q_prev_list[0])**2 + (qt[1]-q_prev_list[1])**2
+             if dist > 0.1**2:
+                 print(f"[!] IK JUMP in slice_trj: {sqrt(dist):.4f} rad")
+                 print(f"    Point: {p}")
+                 print(f"    Prev Q: {q_prev_list}")
+                 print(f"    New Q: {qt}")
+                 print(f"    Limits: {limits}")
+                 
+                 # Recalculate raw solutions to see what was filtered
+                 if 'solutions' not in locals(): # solutions variable is local to ik, let's just print res info
+                      pass # We are outside ik scope here, so we can't see internal variables of ik()
+                 
+                 # Calling IK again with debugging print would be creating a loop, 
+                 # instead let's just inspect limits vs Prev Q
+
         q0s.append(qt[0])
         q1s.append(qt[1])
         penups.append(0)
