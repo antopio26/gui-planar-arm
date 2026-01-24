@@ -502,7 +502,7 @@ export class CanvasHandler {
         // Draw Manipulator
         if (this.state.manipulator) {
             this.state.manipulator.draw_pose(ctx);
-            // this.state.manipulator.draw_traces(ctx); // Performance heavy
+            this.state.manipulator.draw_traces(ctx);
         }
 
         // Tool Preview

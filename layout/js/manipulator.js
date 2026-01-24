@@ -47,16 +47,21 @@ export class Manipulator {
 
     add2trace(q) {
         const [x1, x2] = this.dk(q);
+        // Store point with pen state
+        // We only really care about x2 (End Effector) having pen state?
+        // But x1 (Elbow) trace might just be solid blue.
         this.traces['x1'].push(x1);
-        this.traces['x2'].push(x2);
+        this.traces['x2'].push({ x: x2[0], y: x2[1], pen: this.penState });
     }
 
     add_trace(points) {
         this.traces = { 'x1': [], 'x2': [] };
         for (let point of points) {
+            // Check if point has pen info?
+            // Assuming points has 'x', 'y'. pen?
             const [p1, p2] = abs2rel(point['x'], point['y'], this.settings);
             this.traces['x1'].push(p1);
-            this.traces['x2'].push(p2);
+            this.traces['x2'].push({ x: p2[0], y: p2[1], pen: point.pen || 0 }); // Default down
         }
     }
 
@@ -240,15 +245,19 @@ export class Manipulator {
         ctx.closePath();
     }
 
-    draw_traces(ctx, colors = ['rgba(0,0,255,0.3)', 'rgba(0,255,0,0.3)']) {
+    draw_traces(ctx) {
         // Traces are heavy, draw them efficiently
         if (this.traces['x1'].length < 1 || this.traces['x2'].length < 1) return;
 
-        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
 
-        // Trace 1
+        // --- Trace 1 (Elbow) ---
+        // Simple continuous line
+        ctx.lineWidth = 2; // Thinner for elbow
         ctx.beginPath();
-        ctx.strokeStyle = colors[0];
+        ctx.strokeStyle = '#00bcd4'; // Cyan (matches Joint 2 color from Time Plot)
+
         ctx.moveTo(this.traces['x1'][0][0], this.traces['x1'][0][1]);
         for (let p of this.traces['x1']) {
             ctx.lineTo(p[0], p[1]);
@@ -256,14 +265,50 @@ export class Manipulator {
         ctx.stroke();
         ctx.closePath();
 
-        // Trace 2
+
+        // --- Trace 2 (End Effector) ---
+        // Segments based on Pen State
+        ctx.lineWidth = 3;
+
+        const path = this.traces['x2'];
+        if (path.length < 2) return;
+
+        // Iterate and draw segments
+        // Optimization: Group contiguous segments of same state?
+        // Or just draw lineTo until state changes?
+
+        let currentState = path[0].pen;
         ctx.beginPath();
-        ctx.strokeStyle = colors[1];
-        ctx.moveTo(this.traces['x2'][0][0], this.traces['x2'][0][1]);
-        for (let p of this.traces['x2']) {
-            ctx.lineTo(p[0], p[1]);
+        this.startSegmentStyle(ctx, currentState);
+        ctx.moveTo(path[0].x, path[0].y);
+
+        for (let i = 1; i < path.length; i++) {
+            const p = path[i];
+
+            // If state changed, stroke current path and start new one
+            if (p.pen !== currentState) {
+                ctx.lineTo(p.x, p.y); // Finish segment at this point
+                ctx.stroke();
+
+                currentState = p.pen;
+                ctx.beginPath();
+                this.startSegmentStyle(ctx, currentState);
+                ctx.moveTo(p.x, p.y); // Start new segment from here
+            } else {
+                ctx.lineTo(p.x, p.y);
+            }
         }
         ctx.stroke();
-        ctx.closePath();
+        ctx.setLineDash([]); // Reset
+    }
+
+    startSegmentStyle(ctx, penState) {
+        if (penState === 1) { // Up
+            ctx.strokeStyle = '#ffbb33'; // Orange
+            ctx.setLineDash([5, 5]);
+        } else { // Down (0)
+            ctx.strokeStyle = '#ffffff'; // White
+            ctx.setLineDash([]);
+        }
     }
 }

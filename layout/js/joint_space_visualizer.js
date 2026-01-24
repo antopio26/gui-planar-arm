@@ -43,22 +43,27 @@ export class JointSpaceVisualizer {
         this.trajectoryData = { q1: q1s, q2: q2s };
     }
 
-    addTrace(q1, q2) {
+    addTrace(q1, q2, penState = 0) {
         if (q1 === undefined || q2 === undefined || isNaN(q1) || isNaN(q2)) {
             console.warn("Invalid trace point received:", q1, q2);
             return;
         }
         this.traceData.q1.push(q1);
         this.traceData.q2.push(q2);
+        // Store pen state in separate array (or struct, but let's add array)
+        if (!this.traceData.pen) this.traceData.pen = [];
+        this.traceData.pen.push(penState);
+
         // Limit trace size to avoid performance issues
         if (this.traceData.q1.length > 5000) {
             this.traceData.q1.shift();
             this.traceData.q2.shift();
+            this.traceData.pen.shift();
         }
     }
 
     clearTrace() {
-        this.traceData = { q1: [], q2: [] };
+        this.traceData = { q1: [], q2: [], pen: [] };
     }
 
     // Coordinate Transform: Joint Space -> Canvas Pixels
@@ -171,22 +176,38 @@ export class JointSpaceVisualizer {
     drawTrajectory() {
         const limits = this.state.settings.limits;
 
-        // 1. Draw Executed Trace (Ghost) - SOLID BLUE
+        // 1. Draw Executed Trace (Real-time)
         if (this.traceData.q1.length > 1) {
-            this.ctx.beginPath();
-            this.ctx.strokeStyle = '#00e5ff'; // Accent Blue/Cyan
-            this.ctx.lineWidth = 2; // Prominent
-            this.ctx.setLineDash([]); // Solid
-
             const q1s = this.traceData.q1;
             const q2s = this.traceData.q2;
+            const pens = this.traceData.pen || new Array(q1s.length).fill(0); // Default 0 (Down)
 
-            for (let i = 0; i < q1s.length; i++) {
-                const p = this.toCanvas(q1s[i], q2s[i], limits);
-                if (i === 0) this.ctx.moveTo(p.x, p.y);
-                else this.ctx.lineTo(p.x, p.y);
+            this.ctx.lineWidth = 2; // Prominent
+
+            let currentState = pens[0];
+            this.ctx.beginPath();
+            this.startSegmentStyle(this.ctx, currentState);
+
+            let p = this.toCanvas(q1s[0], q2s[0], limits);
+            this.ctx.moveTo(p.x, p.y);
+
+            for (let i = 1; i < q1s.length; i++) {
+                p = this.toCanvas(q1s[i], q2s[i], limits);
+
+                if (pens[i] !== currentState) {
+                    this.ctx.lineTo(p.x, p.y);
+                    this.ctx.stroke();
+
+                    currentState = pens[i];
+                    this.ctx.beginPath();
+                    this.startSegmentStyle(this.ctx, currentState);
+                    this.ctx.moveTo(p.x, p.y);
+                } else {
+                    this.ctx.lineTo(p.x, p.y);
+                }
             }
             this.ctx.stroke();
+            this.ctx.setLineDash([]);
         }
 
         // 2. Draw Planned Trajectory (Preview) - GRAY DASHED THIN
@@ -206,6 +227,16 @@ export class JointSpaceVisualizer {
             }
             this.ctx.stroke();
             this.ctx.setLineDash([]); // Reset
+        }
+    }
+
+    startSegmentStyle(ctx, penState) {
+        if (penState === 1) { // Up
+            ctx.strokeStyle = '#ffbb33'; // Orange
+            ctx.setLineDash([5, 5]);
+        } else { // Down (0)
+            ctx.strokeStyle = '#ffffff'; // White
+            ctx.setLineDash([]);
         }
     }
 

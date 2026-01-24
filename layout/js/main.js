@@ -645,7 +645,11 @@ API.initCallbacks({
             if (ui.monQ2) ui.monQ2.value = q[1].toFixed(2);
 
             // Update Joint Space Trace
-            if (jointVisualizer) jointVisualizer.addTrace(q[0], q[1]);
+            if (jointVisualizer) jointVisualizer.addTrace(q[0], q[1], penup);
+
+            // Update Manipulator Trace (Cartesian)
+            // Need to add to trace manually since onDrawPose is just setting state
+            state.manipulator.add2trace(q);
 
             // Update Time Series Plot (using system time or relative? Py backend might not send 't' in 'state')
             // If backend sends 't', use it. Does it?

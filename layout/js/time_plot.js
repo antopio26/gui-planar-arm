@@ -71,7 +71,7 @@ export class TimePlotVisualizer {
     }
 
     // Generic Plot Function
-    drawPlot(ctx, width, height, dataKey, limitMin, limitMax, color, label) {
+    drawPlot(ctx, width, height, dataKey, limitMin, limitMax, color, label, traceColor = '#00e5ff') {
         ctx.clearRect(0, 0, width, height);
 
         // Grid & Axis
@@ -134,10 +134,10 @@ export class TimePlotVisualizer {
             ctx.setLineDash([]);
         }
 
-        // --- REAL TRACE (Solid Blue) ---
+        // --- REAL TRACE (Solid Trace Color) ---
         if (this.traceData.ts.length > 1) {
             ctx.beginPath();
-            ctx.strokeStyle = '#00e5ff'; // Accent Blue
+            ctx.strokeStyle = traceColor; // Use passed color
             ctx.lineWidth = 2;
 
             const ts = this.traceData.ts;
@@ -186,12 +186,14 @@ export class TimePlotVisualizer {
         const h1 = parseFloat(this.q1Canvas.style.height);
         const lim = this.state.settings.limits;
 
-        this.drawPlot(this.ctx1, w1, h1, 'q1', lim.q1_min, lim.q1_max, '#ff5252', 'Joint 1 (Shoulder)');
+        // Use Red (#ff5252) for both limits and trace
+        this.drawPlot(this.ctx1, w1, h1, 'q1', lim.q1_min, lim.q1_max, '#ff5252', 'Joint 1 (Shoulder)', '#ff5252');
 
         // Draw Q2
         const w2 = parseFloat(this.q2Canvas.style.width);
         const h2 = parseFloat(this.q2Canvas.style.height);
-        this.drawPlot(this.ctx2, w2, h2, 'q2', lim.q2_min, lim.q2_max, '#00bcd4', 'Joint 2 (Elbow)');
+        // Use Cyan (#00bcd4) for both limits and trace
+        this.drawPlot(this.ctx2, w2, h2, 'q2', lim.q2_min, lim.q2_max, '#00bcd4', 'Joint 2 (Elbow)', '#00bcd4');
 
         requestAnimationFrame(() => this.animate());
     }
