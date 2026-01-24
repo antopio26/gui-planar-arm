@@ -160,10 +160,10 @@ export class JointSpaceVisualizer {
         this.ctx.fillStyle = '#888';
         this.ctx.font = '12px Inter';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText("Shoulder Joint (q1)", this.padding + this.graphWidth / 2, height - 10);
+        this.ctx.fillText("Shoulder Joint (q1)", this.padding + this.graphWidth / 2, height - 30);
 
         this.ctx.save();
-        this.ctx.translate(15, this.padding + this.graphHeight / 2);
+        this.ctx.translate(35, this.padding + this.graphHeight / 2);
         this.ctx.rotate(-Math.PI / 2);
         this.ctx.textAlign = 'center';
         this.ctx.fillText("Elbow Joint (q2)", 0, 0);
@@ -172,8 +172,8 @@ export class JointSpaceVisualizer {
         // Min/Max Text
         this.ctx.textAlign = 'center';
         this.ctx.fillStyle = '#ff5252';
-        this.ctx.fillText(limits.q1_min.toFixed(2), this.padding, height - 20);
-        this.ctx.fillText(limits.q1_max.toFixed(2), width - this.padding, height - 20);
+        this.ctx.fillText(limits.q1_min.toFixed(2), this.padding, height - 30);
+        this.ctx.fillText(limits.q1_max.toFixed(2), width - this.padding, height - 30);
 
         this.ctx.textAlign = 'right';
         this.ctx.fillStyle = '#00bcd4';

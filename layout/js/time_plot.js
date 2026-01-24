@@ -154,8 +154,9 @@ export class TimePlotVisualizer {
 
         // Draw Labels
         ctx.fillStyle = '#aaa';
+        ctx.textAlign = 'left';
         ctx.font = '12px Inter';
-        ctx.fillText(label, this.padding, 15);
+        ctx.fillText(label, this.padding, 22);
 
         ctx.textAlign = 'right';
         ctx.fillStyle = color; // Limit color
@@ -187,13 +188,13 @@ export class TimePlotVisualizer {
         const lim = this.state.settings.limits;
 
         // Use Red (#ff5252) for both limits and trace
-        this.drawPlot(this.ctx1, w1, h1, 'q1', lim.q1_min, lim.q1_max, '#ff5252', 'Joint 1 (Shoulder)', '#ff5252');
+        this.drawPlot(this.ctx1, w1, h1, 'q1', lim.q1_min, lim.q1_max, '#ff5252', 'Shoulder Joint (q1)', '#ff5252');
 
         // Draw Q2
         const w2 = parseFloat(this.q2Canvas.style.width);
         const h2 = parseFloat(this.q2Canvas.style.height);
         // Use Cyan (#00bcd4) for both limits and trace
-        this.drawPlot(this.ctx2, w2, h2, 'q2', lim.q2_min, lim.q2_max, '#00bcd4', 'Joint 2 (Elbow)', '#00bcd4');
+        this.drawPlot(this.ctx2, w2, h2, 'q2', lim.q2_min, lim.q2_max, '#00bcd4', 'Elbow Joint (q2)', '#00bcd4');
 
         requestAnimationFrame(() => this.animate());
     }
