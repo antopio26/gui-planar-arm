@@ -44,6 +44,10 @@ export class JointSpaceVisualizer {
     }
 
     addTrace(q1, q2) {
+        if (q1 === undefined || q2 === undefined || isNaN(q1) || isNaN(q2)) {
+            console.warn("Invalid trace point received:", q1, q2);
+            return;
+        }
         this.traceData.q1.push(q1);
         this.traceData.q2.push(q2);
         // Limit trace size to avoid performance issues
@@ -167,11 +171,12 @@ export class JointSpaceVisualizer {
     drawTrajectory() {
         const limits = this.state.settings.limits;
 
-        // 1. Draw Executed Trace (Ghost)
+        // 1. Draw Executed Trace (Ghost) - SOLID BLUE
         if (this.traceData.q1.length > 1) {
             this.ctx.beginPath();
-            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; // Faint white
-            this.ctx.lineWidth = 1;
+            this.ctx.strokeStyle = '#00e5ff'; // Accent Blue/Cyan
+            this.ctx.lineWidth = 2; // Prominent
+            this.ctx.setLineDash([]); // Solid
 
             const q1s = this.traceData.q1;
             const q2s = this.traceData.q2;
@@ -184,12 +189,12 @@ export class JointSpaceVisualizer {
             this.ctx.stroke();
         }
 
-        // 2. Draw Planned Trajectory (Preview)
+        // 2. Draw Planned Trajectory (Preview) - GRAY DASHED THIN
         if (this.trajectoryData && this.trajectoryData.q1.length) {
             this.ctx.beginPath();
-            this.ctx.strokeStyle = '#00e5ff'; // Cyan
-            this.ctx.lineWidth = 2;
-            this.ctx.setLineDash([5, 5]); // Dotted Line
+            this.ctx.strokeStyle = '#888888'; // Gray
+            this.ctx.lineWidth = 1; // Thin/Smaller
+            this.ctx.setLineDash([4, 4]); // Dashed
 
             const q1s = this.trajectoryData.q1;
             const q2s = this.trajectoryData.q2;

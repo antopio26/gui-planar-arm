@@ -294,6 +294,10 @@ ui.btnHoming.addEventListener('click', () => {
 });
 
 ui.btnSend.addEventListener('click', async () => {
+    // Clear the ghost trace in Joint Space visualization for the new run
+    // Moved to START to persist the trace after execution (until next run)
+    if (jointVisualizer) jointVisualizer.clearTrace();
+
     // Pass current settings to backend to avoid "jumps" if config changed
     try {
         await API.sendData(state.settings); // Waits for py_get_data to complete
@@ -304,9 +308,6 @@ ui.btnSend.addEventListener('click', async () => {
 
         // Trigger resize/redraw to show the ghost path immediately
         if (canvasHandler) canvasHandler.resize();
-
-        // Clear the ghost trace in Joint Space visualization for the new run
-        if (jointVisualizer) jointVisualizer.clearTrace();
 
     } catch (e) {
         console.error("Send Failed:", e);
