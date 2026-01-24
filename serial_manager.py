@@ -116,14 +116,31 @@ class SerialManager:
                         sent_count += 1
                         
                     # 2. Main Execution Loop
+                    next_wake = time()
+                    tc_period = 0.04 # Target period (could be optimized)
+                    
                     while sent_count < num_points:
                         if state.stop_requested:
                             print("!!! TRAJECTORY ABORTED BY USER (ONLINE) !!!")
                             break
 
-                        sleep(0.04) # Sleep 40ms -> Firmware consumes ~4 points
+                        # Drift-compensating sleep
+                        now = time()
+                        sleep_time = next_wake - now
+                        if sleep_time > 0:
+                            sleep(sleep_time)
+                        else:
+                            # We are behind schedule!
+                            pass
+                            
+                        # Update for next loop
+                        next_wake += tc_period
+
+                        # Send a batch of points
+                        # Calculate how many points correspond to this time step to stay real-time
+                        # Firmware consumes ~25 points/sec. 0.04s = ~1 point.
+                        # But we are sending ahead.
                         
-                        # Send a batch of 5 points to top up
                         limit = min(sent_count + BATCH_SIZE, num_points)
                         for i in range(sent_count, limit):
                                 packet = bp.encode_trajectory_point(
@@ -137,8 +154,7 @@ class SerialManager:
                         sent_count = limit
                         
                         # Update State for UI Visualization (Commanded Position)
-                        # This allows seeing the arm move even if feedback is silent
-                        current_idx = limit - 1
+                        current_idx = min(limit - 1, num_points - 1)
                         state.firmware.q0 = data['q'][0][current_idx]
                         state.firmware.q1 = data['q'][1][current_idx]
                         state.firmware.penup = data['q'][2][current_idx]
@@ -155,6 +171,7 @@ class SerialManager:
                         state.firmware.q1 = data['q'][1][-1]
                         
                         # Wait for the trajectory to finish physically
+                        # We used start_time at the beginning.
                         total_duration = num_points * SETTINGS['Tc']
                         elapsed = time() - start_time
                         remaining = total_duration - elapsed
@@ -168,21 +185,37 @@ class SerialManager:
                     # --- SIMULATION ENGINE ---
                     print("SIMULATION MODE: Playing trajectory locally...")
                     state.reset_recording()
+                    
                     start_time = time()
+                    next_wake = start_time
+                    target_period = SETTINGS['Tc']
 
                     for i in range(num_points):
                         if state.stop_requested:
                             print("!!! TRAJECTORY ABORTED BY USER (SIMULATION) !!!")
                             break
 
-                        # Simula il passare del tempo esatto del controller
-                        loop_start = time()
+                        # Drift-compensating sleep
+                        now = time()
+                        # Determine when this specific point SHOULD be processed relative to start
+                        # Ideally, point `i` should be processed at `start_time + i * Tc`
+                        target_time = start_time + (i * target_period)
+                        
+                        sleep_time = target_time - now
+                        if sleep_time > 0:
+                            try:
+                                sleep(sleep_time)
+                            except ValueError:
+                                pass # negative sleep?
+                        
+                        # Actual processing time
+                        # loop_start = time() # Used for recording actual execution time
 
                         # Update State
                         state.firmware.q0 = data['q'][0][i]
                         state.firmware.q1 = data['q'][1][i]
                         state.firmware.penup = data['q'][2][i]
-                        state.firmware.last_update = loop_start
+                        state.firmware.last_update = time()
                         
                         # Notify UI (Animation)
                         try:
@@ -193,12 +226,8 @@ class SerialManager:
                         if state.recording_active:
                             state.rec_data['q0'].append(state.firmware.q0)
                             state.rec_data['q1'].append(state.firmware.q1)
-                            state.rec_data['t'].append(loop_start)
-                        
-                        # Wait typical sample time
-                        # Assuming Tc is reliable. If too fast on Windows, this might drift, 
-                        # but acceptable for simulation.
-                        sleep(SETTINGS['Tc']) 
+                            # Record the ACTUAL time relative to start (or absolute)
+                            state.rec_data['t'].append(time())
                         
                         if i % 100 == 0:
                             print(f"Sim Progress: {i}/{num_points}")

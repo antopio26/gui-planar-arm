@@ -40,45 +40,13 @@ def plot_recorded_data(des_q0, des_q1, Tc, rec_data):
     q0_des = np.array(des_q0)
     
     # 3. Alignment Logic (Start/End Scaling)
-    try:
-        # Helper to find active duration based on velocity
-        def get_active_bounds(t, q, threshold=0.05):
-            # Calculate velocity (simple difference)
-            vel = np.gradient(q) 
-            # Normalize velocity to find significant movement
-            max_vel = np.max(np.abs(vel))
-            if max_vel == 0: return 0, len(t)-1
-            
-            is_moving = np.abs(vel) > max_vel * threshold
-            indices = np.where(is_moving)[0]
-            
-            if len(indices) < 2:
-                return 0, len(t)-1
-            
-            return indices[0], indices[-1]
-
-        # Find bounds in indices
-        idx_s_des, idx_e_des = get_active_bounds(t_des, q0_des)
-        idx_s_act, idx_e_act = get_active_bounds(t_act, q0_act)
-        
-        # Get times
-        t_s_des, t_e_des = t_des[idx_s_des], t_des[idx_e_des]
-        t_s_act, t_e_act = t_act[idx_s_act], t_act[idx_e_act]
-        
-        dur_des = t_e_des - t_s_des
-        dur_act = t_e_act - t_s_act
-        
-        if dur_act > 0.1: # Avoid div by zero
-            scale = dur_des / dur_act
-            shift = t_s_des - (t_s_act * scale)
-            
-            print(f"Aligning: Scale={scale:.4f}, Shift={shift:.4f}")
-            
-            # Apply transformation
-            t_act = t_act * scale + shift
-            
-    except Exception as e:
-        print(f"Alignment failed: {e}")
+    # 3. Alignment Logic (Start/End Scaling)
+    # DISABLED: We want to see the RAW timing to verify the fix.
+    # try:
+    #     # ... (code removed/commented) ...
+    #     pass      
+    # except Exception as e:
+    #     print(f"Alignment failed: {e}")
 
     # 4. Plotting
     plt.plot(t_des, des_q0, '--', label='q0_des', alpha=0.7)
