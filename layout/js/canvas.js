@@ -2,10 +2,11 @@ import { Point, find_circ } from './utils.js';
 import { appState, TOOLS } from './state.js';
 
 export class CanvasHandler {
-    constructor(canvas, state) {
+    constructor(canvas, state, onUpdate) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
         this.state = state; // App State Singleton
+        this.onUpdate = onUpdate; // Callback for when data changes
 
         this.mouseX = 0;
         this.mouseY = 0;
@@ -84,7 +85,6 @@ export class CanvasHandler {
         this.state.update();
     }
 
-
     handleMouseMove(e) {
         const rect = this.canvas.getBoundingClientRect();
         this.mouseX = e.clientX - rect.left;
@@ -96,6 +96,8 @@ export class CanvasHandler {
         const y = this.mouseY;
         const settings = this.state.settings;
 
+        console.log(`handleClick: (${x.toFixed(1)}, ${y.toFixed(1)}) Tool: ${this.state.tool} Points: ${this.state.points.length}`);
+
         // Radius check (workspace limit)
         const distSq = Math.pow(x - settings.origin.x, 2) + Math.pow(y - settings.origin.y, 2);
         const maxRadius = this.workspaceRadius || (this.canvas.height / 2); // Fallback
@@ -106,7 +108,10 @@ export class CanvasHandler {
         if (this.state.points.length === 0 && this.state.sentPoints.length > 0) {
             this.state.sentPoints = [];
             this.state.sentTrajectory.reset();
+            // Trigger update to clear backend preview if needed?
         }
+
+        let updated = false;
 
         // Pen Up Logic using ESC / Keyboard
         // If penUp is active, the NEXT click finishes the "move" (dashed line)
@@ -128,53 +133,65 @@ export class CanvasHandler {
                 // If Line tool, we need a start point for the preview... which is p1.
                 // Reset circle def if any?
                 this.state.circleDefinition = [];
+                updated = true;
             } else {
                 // If no points yet, just move there?
                 const p = new Point(x, y, settings);
                 this.state.points.push(p);
                 this.state.penUp = false;
+                updated = true;
             }
-            return; // Handled
-        }
+        } else {
+            const currentTool = this.state.tool;
 
-        const currentTool = this.state.tool;
+            if (currentTool === TOOLS.LINE) {
+                this.state.circleDefinition = [];
 
-        if (currentTool === TOOLS.LINE) {
-            this.state.circleDefinition = [];
+                const newPoint = new Point(x, y, settings);
+                this.state.points.push(newPoint);
 
-            const newPoint = new Point(x, y, settings);
-            this.state.points.push(newPoint);
+                if (this.state.points.length > 1) {
+                    // Check if previous segment was penup?
+                    // Logic handles continuous lines.
+                    const p0 = this.state.points[this.state.points.length - 2];
+                    const p1 = this.state.points[this.state.points.length - 1];
 
-            if (this.state.points.length > 1) {
-                // Check if previous segment was penup?
-                // Logic handles continuous lines.
-                const p0 = this.state.points[this.state.points.length - 2];
-                const p1 = this.state.points[this.state.points.length - 1];
+                    // Only add if not already added by penup logic (which we returned from)
+                    this.state.trajectory.add_line(p0, p1, false); // raised=false
+                    updated = true;
+                }
 
-                // Only add if not already added by penup logic (which we returned from)
-                this.state.trajectory.add_line(p0, p1, false); // raised=false
-            }
+            } else if (currentTool === TOOLS.CIRCLE) {
+                if (this.state.points.length === 0) {
+                    this.state.points.push(new Point(x, y, settings));
+                } else {
+                    this.state.circleDefinition.push(new Point(x, y, settings));
 
-        } else if (currentTool === TOOLS.CIRCLE) {
-            if (this.state.points.length === 0) {
-                this.state.points.push(new Point(x, y, settings));
-            } else {
-                this.state.circleDefinition.push(new Point(x, y, settings));
+                    if (this.state.circleDefinition.length === 2) {
+                        const params = find_circ(this.state.points, this.state.circleDefinition, settings);
+                        this.state.trajectory.add_circle(
+                            params.c, params.r, params.theta_0, params.theta_1,
+                            false, params.a, params.p // raised=false
+                        );
 
-                if (this.state.circleDefinition.length === 2) {
-                    const params = find_circ(this.state.points, this.state.circleDefinition, settings);
-                    this.state.trajectory.add_circle(
-                        params.c, params.r, params.theta_0, params.theta_1,
-                        false, params.a, params.p // raised=false
-                    );
-
-                    this.state.points.push(params.p);
-                    this.state.circleDefinition = [];
+                        this.state.points.push(params.p);
+                        this.state.circleDefinition = [];
+                        updated = true;
+                    }
                 }
             }
         }
 
         if (this.state.manipulator) this.state.manipulator.reset_trace();
+
+        // Notify Parent of Data Change (for Preview calculation)
+        if (updated && this.onUpdate) {
+            try {
+                this.onUpdate();
+            } catch (e) {
+                console.error("Error in onUpdate callback:", e);
+            }
+        }
     }
 
     drawBackground() {

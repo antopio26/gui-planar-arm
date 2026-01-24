@@ -189,6 +189,7 @@ export class JointSpaceVisualizer {
             this.ctx.beginPath();
             this.ctx.strokeStyle = '#00e5ff'; // Cyan
             this.ctx.lineWidth = 2;
+            this.ctx.setLineDash([5, 5]); // Dotted Line
 
             const q1s = this.trajectoryData.q1;
             const q2s = this.trajectoryData.q2;
@@ -199,6 +200,7 @@ export class JointSpaceVisualizer {
                 else this.ctx.lineTo(p.x, p.y);
             }
             this.ctx.stroke();
+            this.ctx.setLineDash([]); // Reset
         }
     }
 

@@ -116,11 +116,11 @@ def py_get_data(settings_override=None):
                      'q2_min': float(l['q2_min']), 'q2_max': float(l['q2_max'])
                  }
 
-        # Retrieve Data from JS
+        # Retrieve Data from JS (Consume/Clear it)
         data_points = eel.js_get_data()() 
         if not data_points:
             print("No data received from JS")
-            return
+            return False
 
         # Generate Trajectory
         q0s, q1s, penups, ts = [], [], [], []
@@ -178,6 +178,8 @@ def py_get_data(settings_override=None):
         if len(q0s) > 0:
              state.last_known_q = [q0s[-1], q1s[-1]]
         
+        return True
+        
         trace_trajectory(q)
         
         # DEBUG Plots (Optional, can comment out if slow)
@@ -194,15 +196,19 @@ def py_compute_trajectory(settings_override=None):
     Returns: { 'q1': [float], 'q2': [float], 'penups': [bool] } or None if error.
     """
     try:
-        data: list = eel.js_get_data()()
-        if len(data) < 1: 
-            return None # Not enough points
-
+        # Retrieve Data from JS explicitly without consuming it (Preview Mode)
+        # Note: eel.function(args)() -> Call immediately and get return
+        data = eel.js_get_data()() 
+        
+        if not data:
+            return None # No data to preview
+            
         # We assume start from current position (or last known)
         current_q = read_position_cartesian()
         
         # Add initial path from current position
-        data = [{'type':'line', 'points':[current_q, data[0]['points'][0]], 'data':{'penup':True}}] + data[::]
+        if len(data) > 0:
+             data = [{'type':'line', 'points':[current_q, data[0]['points'][0]], 'data':{'penup':True}}] + data[::]
         
         # Stitch patches
         q0s = []

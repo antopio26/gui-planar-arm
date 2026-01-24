@@ -137,14 +137,30 @@ function updateRobotConfig() {
     // But if we want the backend to know about it for "Homing" or other ops:
     // We should probably check if we can send it.
     // For now, at least the frontend state is updated.
+
+    // Also update the planned trajectory preview since geometry changed
+    updateTrajectoryPreview();
 }
 
 [ui.inputL1, ui.inputL2, ui.inputQ1Min, ui.inputQ1Max, ui.inputQ2Min, ui.inputQ2Max].forEach(el => {
     if (el) el.addEventListener('input', updateRobotConfig);
 });
 
+async function updateTrajectoryPreview() {
+    if (!jointVisualizer) return;
+    // Ask backend to compute trajectory for current points (drawn in canvas)
+    // using current settings.
+    const result = await API.computeTrajectory(state.settings);
+    if (result) {
+        jointVisualizer.setTrajectoryData(result.q1, result.q2);
+    }
+}
+
 // Initialize Canvas Handler
-const canvasHandler = new CanvasHandler(canvas, state);
+const canvasHandler = new CanvasHandler(canvas, state, () => {
+    // On Shape Added / Update
+    updateTrajectoryPreview();
+});
 const jointVisualizer = new JointSpaceVisualizer(jointCanvas, state);
 
 // --- Mode Switcher Logic ---
@@ -279,8 +295,23 @@ ui.btnHoming.addEventListener('click', () => {
 
 ui.btnSend.addEventListener('click', async () => {
     // Pass current settings to backend to avoid "jumps" if config changed
-    await API.sendData(state.settings);
-    // Sending is triggered via Python callback -> js_get_data
+    try {
+        await API.sendData(state.settings); // Waits for py_get_data to complete
+
+        // If we are here, backend received data and started execution.
+        // Now safely clear the local drawing state (move to sent).
+        state.moveToSent();
+
+        // Trigger resize/redraw to show the ghost path immediately
+        if (canvasHandler) canvasHandler.resize();
+
+        // Clear the ghost trace in Joint Space visualization for the new run
+        if (jointVisualizer) jointVisualizer.clearTrace();
+
+    } catch (e) {
+        console.error("Send Failed:", e);
+        alert("Failed to send trajectory: " + e);
+    }
 });
 
 // Demo button removed
@@ -619,17 +650,11 @@ API.initCallbacks({
     },
 
     onGetData: () => {
+        console.log(`onGetData called. Sending pure payload.`);
         const payload = [];
 
         for (let t of state.trajectory.data) {
             let item = {};
-
-            // Reconstruct payload expected by Python
-            /*
-            line_t = {'type':'line', 'points': [[x1,y1], [x2,y2]], 'data':{'penup': bool}}
-            circle_t = {'type':'circle', 'points': [[a_x, a_y], [b_x, b_y]], 'data':{'penup', 'center':[], 'radius'}}
-            */
-
             if (t.type === 'line') {
                 const p0 = t.data[0];
                 const p1 = t.data[1];
@@ -643,7 +668,6 @@ API.initCallbacks({
             } else if (t.type === 'circle') {
                 const c = t.data[0];
                 const r = t.data[1];
-                // theta0, theta1 ignored in backend?
                 const penup = t.data[4];
                 const a = t.data[5];
                 const p = t.data[6];
@@ -661,8 +685,8 @@ API.initCallbacks({
             payload.push(item);
         }
 
-        // Move current to sent
-        state.moveToSent();
+        // Side-effect free: Do NOT clear points here.
+        // Clearing is handled by the Send Action directly.
 
         return payload;
     }
