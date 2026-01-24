@@ -14,7 +14,10 @@ from lib import transform
 import plotting
 import math
 
-def read_position_cartesian() -> list[float]:
+def read_position_cartesian(sizes=None) -> list[float]:
+    if sizes is None:
+        sizes = SIZES
+
     q_actual = state.last_known_q[:]
     if SETTINGS['ser_started']:
         scm.ser.reset_input_buffer()
@@ -29,7 +32,7 @@ def read_position_cartesian() -> list[float]:
         print(f"READ POS (from state): {q_actual}")
      
     # Convert to Cartesian
-    points = tpy.dk(np.array(q_actual), SIZES)
+    points = tpy.dk(np.array(q_actual), sizes)
     return [points[0,0], points[1,0]]
 
 def validate_trajectory(q, dq, ddq):
@@ -132,7 +135,7 @@ def py_get_data(settings_override=None):
         # Add initial path from current position to the first point in data_points
         # This ensures continuity from the robot's current position
         if data_points and len(data_points[0]['points']) > 0:
-            current_cartesian_pos = read_position_cartesian()
+            current_cartesian_pos = read_position_cartesian(current_sizes)
             first_target_cartesian_pos = data_points[0]['points'][0]
             
             # Create a line segment from current position to the first point
@@ -203,8 +206,11 @@ def py_compute_trajectory(settings_override=None):
         if not data:
             return None # No data to preview
             
+        sizes, limits = resolve_config(settings_override)
+
         # We assume start from current position (or last known)
-        current_q = read_position_cartesian()
+        # Pass resolved sizes to ensure correct FK calculation
+        current_q = read_position_cartesian(sizes)
         
         # Add initial path from current position
         if len(data) > 0:
@@ -215,8 +221,6 @@ def py_compute_trajectory(settings_override=None):
         q1s = []
         penups = []
         ts = []
-        
-        sizes, limits = resolve_config(settings_override)
 
         # Simulation/Preview only -> Use internal state last know
         current_joint_pos = state.last_known_q 
@@ -245,7 +249,8 @@ def py_compute_trajectory(settings_override=None):
         return {
             'q1': q0s,
             'q2': q1s,
-            'penups': penups
+            'penups': penups,
+            't': ts
         }
 
     except Exception as e:

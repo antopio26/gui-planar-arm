@@ -262,8 +262,14 @@
                 <canvas id="joint_canvas" width="700" height="700"></canvas>
             </div>
 
-            <div class="tab-content" id="tab-trajectories">
-                <div class="placeholder-msg">Trajectory Plotting Integration Pending...</div>
+            <div class="tab-content" id="tab-trajectories" style="flex-direction: column; gap: 10px; padding: 10px;">
+                <!-- Container for Time Plots -->
+                <div style="flex: 1; position: relative; width: 100%; min-height: 0;">
+                    <canvas id="q1_plot_canvas" style="width: 100%; height: 100%;"></canvas>
+                </div>
+                <div style="flex: 1; position: relative; width: 100%; min-height: 0;">
+                    <canvas id="q2_plot_canvas" style="width: 100%; height: 100%;"></canvas>
+                </div>
             </div>
         </main>
     </div>

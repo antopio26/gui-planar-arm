@@ -4,15 +4,23 @@ import { Point } from './utils.js';
 import { API } from './api.js';
 import { TabManager } from './tabs.js';
 import { JointSpaceVisualizer } from './joint_space_visualizer.js';
+import { TimePlotVisualizer } from './time_plot.js';
 
 // --- Initialization ---
 
 const canvas = document.getElementById('input_canvas');
 const jointCanvas = document.getElementById('joint_canvas');
+const q1Canvas = document.getElementById('q1_plot_canvas');
+const q2Canvas = document.getElementById('q2_plot_canvas');
+
 const state = appState;
 
 // Initialize State
 state.init(canvas.width, canvas.height);
+
+// Initialize Visualizers
+const jointVisualizer = new JointSpaceVisualizer(jointCanvas, state);
+const timeVisualizer = new TimePlotVisualizer(q1Canvas, q2Canvas, state);
 
 // Initialize Tab Manager
 // Moved to bottom with callback
@@ -153,6 +161,17 @@ async function updateTrajectoryPreview() {
     const result = await API.computeTrajectory(state.settings);
     if (result) {
         jointVisualizer.setTrajectoryData(result.q1, result.q2);
+        if (timeVisualizer && result.t) {
+            timeVisualizer.setPlannedPath(result.t, result.q1, result.q2);
+            // Update expected duration for cutoff
+            if (result.t.length > 0) {
+                state.expectedDuration = result.t[result.t.length - 1];
+            }
+        }
+    } else {
+        jointVisualizer.setTrajectoryData([], []);
+        if (timeVisualizer) timeVisualizer.setPlannedPath([], [], []);
+        state.expectedDuration = 0; // Reset
     }
 }
 
@@ -161,7 +180,7 @@ const canvasHandler = new CanvasHandler(canvas, state, () => {
     // On Shape Added / Update
     updateTrajectoryPreview();
 });
-const jointVisualizer = new JointSpaceVisualizer(jointCanvas, state);
+
 
 // --- Mode Switcher Logic ---
 
@@ -173,6 +192,8 @@ const tabManager = new TabManager((activeTab) => {
             canvasHandler.resize();
         } else if (activeTab === 'joint') {
             jointVisualizer.resize();
+        } else if (activeTab === 'trajectories') {
+            timeVisualizer.resize();
         }
     });
 });
@@ -290,6 +311,12 @@ ui.btnClearCanvas.addEventListener('click', async () => {
 
 // Commands
 ui.btnHoming.addEventListener('click', () => {
+    // Reset timers for Homing visualization
+    state.startTime = Date.now() / 1000;
+    state.expectedDuration = 20.0; // Give it enough time to visualize
+    if (jointVisualizer) jointVisualizer.clearTrace();
+    if (timeVisualizer) timeVisualizer.clearTrace();
+
     API.homing();
 });
 
@@ -297,6 +324,10 @@ ui.btnSend.addEventListener('click', async () => {
     // Clear the ghost trace in Joint Space visualization for the new run
     // Moved to START to persist the trace after execution (until next run)
     if (jointVisualizer) jointVisualizer.clearTrace();
+    if (timeVisualizer) timeVisualizer.clearTrace();
+
+    // Reset Timer for real-time plot alignment
+    state.startTime = Date.now() / 1000;
 
     // Pass current settings to backend to avoid "jumps" if config changed
     try {
@@ -615,6 +646,36 @@ API.initCallbacks({
 
             // Update Joint Space Trace
             if (jointVisualizer) jointVisualizer.addTrace(q[0], q[1]);
+
+            // Update Time Series Plot (using system time or relative? Py backend might not send 't' in 'state')
+            // If backend sends 't', use it. Does it?
+            // "py_read_state": { q1, q2, ... }
+            // Let's use performance.now() / 1000 or increment?
+            // Ideally backend sends timestamp.
+            // For now, let's use a local accumulated time or simple increment if backend allows.
+            // Checking py_read_state... returns global state.
+            // Let's assume we maintain a local `simulationTime` or something.
+            // Or just use the visualizer's internal clock if needed?
+            // Better: Add `t` to `addTrace`.
+            // Let's assume 60hz loop approx? No, polling is 50ms?
+            // Let's use Date.now() relative to start.
+
+            // Actually, we don't have a shared time reference with the planner unless we send it.
+            // Planned path has 't' from 0 to T.
+            // We should reset our local timer when trajectory starts.
+
+            // Hack: Use `state.executionTime` if we track it?
+            // Let's just pass `TimePlotVisualizer` a delta or current time.
+            // Calculate Time 't'
+            const now = Date.now() / 1000;
+            if (!state.startTime) state.startTime = now;
+            const t = now - state.startTime;
+
+            // Only update plot if within expected duration + buffer (e.g. 2s)
+            // This prevents the plot from scrolling indefinitely after finished.
+            if (t <= (state.expectedDuration + 2.0)) {
+                if (timeVisualizer) timeVisualizer.addTrace(t, q[0], q[1]);
+            }
 
             // Calculate End Effector Position (relative to origin, not pixels)
             // state.manipulator.end_eff gives pixels.

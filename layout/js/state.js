@@ -39,7 +39,10 @@ class StateManager {
         this.circleDefinition = [];
 
         this.tool = TOOLS.LINE;
+        this.tool = TOOLS.LINE;
         this.penUp = false;
+
+        this.startTime = null; // For Time Plot synchronization
 
         this.isSerialOnline = false;
 
