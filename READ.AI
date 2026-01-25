@@ -470,3 +470,27 @@ class StateManager {
 
 **Stato Progetto**: ✅ Pronto per uso in ambiente controllato
 **Prossimi Step Consigliati**: Test automatici, logging strutturato.
+
+### Versione 2.4 (22 Gennaio 2026 - Polish, Safety & UX)
+**Focus**: Robustezza Traiettorie, UX Migliorato, Ottimizzazione Performance.
+
+**Miglioramenti Frontend (UI)**:
+1. ✅ **Workspace Config Avanzata**: Controlli dedicati per raggio interno/esterno in modalità Curva.
+2. ✅ **Deep Clean**: Il pulsante "Clean State" esegue ora un reset profondo (History, Buffer Testo, Tracciamento Firmware).
+3. ✅ **Visual Feedback Intuitivo**: Introdotta distinzione visiva tra punti di disegno (Cerchio Ciano) e punti di snap/hover (Quadrato Arancione).
+4. ✅ **Definizione Workspace**: Aggiornati i default per il foglio A4 verticale (Linear: x=0.05, y=-0.15, w=0.20, h=0.30).
+
+**Miglioramenti Backend (Logic)**:
+1. ✅ **Homing Sicuro**: L'algoritmo di homing ora legge la posizione reale dal firmware (`state.firmware`) invece dell'ultimo target teorico, prevenendo salti pericolosi.
+2. ✅ **IK Safety Guard**: `trajpy.py` ora intercetta i punti irraggiungibili (Inverse Kinematics failure) durante la generazione delle patch, evitando crash silenziosi o movimenti erratici.
+3. ✅ **Ottimizzazione Ellissi**: Ridotta la risoluzione di campionamento curve (da 2° a 5° step) per bilanciare fluidità e carico dati seriale.
+4. ✅ **Debug Logging**: Aggiunto tracciamento dettagliato per il flusso dati frontend->backend.
+
+**File Modificati**:
+- `gui_interface.py`: Validazione IK, Homing logic, Debugging.
+- `layout/js/main.js`: Deep Clean logic, Workspace listeners.
+- `layout/js/canvas.js`: Hover visual feedback.
+- `lib/char_gen.py`: Ottimizzazione step ellissi.
+- `lib/trajpy.py`: Protezione null-points su segmenti pen-up.
+
+**Stato Progetto**: ✅ Stabile e Ottimizzato.
