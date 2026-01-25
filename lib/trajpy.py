@@ -366,7 +366,7 @@ def ik(x:float, y:float, z:float = 0, theta:float = None, sizes:dict[float] = {'
 
     # 3. Filter by Limits
     valid_solutions = []
-    TOL = 1e-4 # Small tolerance for floating point boundary issues
+    TOL = 1e-2 # 0.01 rad tolerance for boundary continuity
     if limits:
         for (q1, q2) in solutions:
             if (limits['q1_min'] - TOL <= q1 <= limits['q1_max'] + TOL) and \
