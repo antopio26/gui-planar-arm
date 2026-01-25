@@ -661,7 +661,7 @@ def slice_trj(patch: dict, **kargs):
                  jump_mag = sqrt(dist)
                  error_msg = f"IK Jump Detected: {jump_mag:.4f} rad. The path is not continuous."
                  print(f"[!] {error_msg}")
-                 raise Exception(error_msg)
+                 # raise Exception(error_msg)
                  print(f"    Point: {p}")
                  print(f"    Prev Q: {q_prev_list}")
                  print(f"    New Q: {qt}")

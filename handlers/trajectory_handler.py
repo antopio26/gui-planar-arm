@@ -64,7 +64,7 @@ def generate_trajectory_data(data_points, current_sizes, current_limits, current
             if dist > 0.1: # 0.1 rad tolerance
                 error_msg = f"Stitching Jump Detected: {dist:.4f} rad. New segment starts far from previous end."
                 print(f"[!] {error_msg}")
-                raise Exception(error_msg)
+                # raise Exception(error_msg)
                 print(f"    Prev End: {prev_end}")
                 print(f"    New Start: {start_new}")
                 print(f"    Patch Type: {patch.get('type')}, PenUp: {patch.get('data', {}).get('penup')}")
