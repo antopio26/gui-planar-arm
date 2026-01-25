@@ -185,7 +185,8 @@ def py_compute_trajectory(settings_override=None):
     """
     try:
         data = eel.js_get_data()() 
-        if not data: return None
+        if not data: 
+             return {'status': 'success', 'data': {'q1': [], 'q2': [], 't': []}}
             
         sizes, limits = resolve_config(settings_override)
         current_q = read_position_cartesian(sizes)
@@ -198,16 +199,19 @@ def py_compute_trajectory(settings_override=None):
         q0s, q1s, penups, ts, _ = traj_handler.generate_trajectory_data(data, sizes, limits, state.last_known_q)
 
         return {
-            'q1': q0s,
-            'q2': q1s,
-            'penups': penups,
-            't': ts
+            'status': 'success',
+            'data': {
+                'q1': q0s,
+                'q2': q1s,
+                'penups': penups,
+                't': ts
+            }
         }
 
     except Exception as e:
         print(f"Error in py_compute_trajectory: {e}")
-        traceback.print_exc()
-        return None
+        # traceback.print_exc()
+        return {'status': 'error', 'message': str(e)}
 
 @eel.expose
 def py_get_data(settings_override=None):
@@ -217,7 +221,7 @@ def py_get_data(settings_override=None):
         
         if not data_points:
             print("No data received from JS")
-            return False
+            return {'status': 'error', 'message': "No data received from frontend."}
 
         current_joint_pos = state.last_known_q if state.last_known_q else [0, 0]
 
@@ -249,12 +253,12 @@ def py_get_data(settings_override=None):
         if len(q0s) > 0:
              state.last_known_q = last_q
         
-        return True
+        return {'status': 'success'}
         
     except Exception as e:
         print(f"Error in py_get_data: {e}")
         traceback.print_exc()
-        return False
+        return {'status': 'error', 'message': str(e)}
 
 @eel.expose
 def py_stop_trajectory():

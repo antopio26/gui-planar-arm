@@ -24,7 +24,7 @@ export const API = {
     async sendData(settings) {
         // settings: optional override for backend (limits, sizes)
         if (!window.eel) return;
-        await window.eel.py_get_data(settings)();
+        return await window.eel.py_get_data(settings)();
     },
 
     async generateText(text, options, settings) {

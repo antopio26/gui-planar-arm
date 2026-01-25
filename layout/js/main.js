@@ -122,6 +122,61 @@ API.getConfig().then(config => {
     }
 });
 
+// --- Error Modal ---
+function createErrorModal() {
+    const existing = document.getElementById('error-modal-overlay');
+    if (existing) return existing;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'error-modal-overlay';
+    overlay.className = 'modal-overlay';
+
+    overlay.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                Trajectory Error
+            </div>
+            <div class="modal-body" id="error-modal-message">
+                Something went wrong.
+            </div>
+            <div class="modal-footer">
+                <button id="error-modal-cleanup" class="btn active">Clean Up</button>
+                <button id="error-modal-close" class="btn">Close</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // Bind Events
+    const closeBtn = overlay.querySelector('#error-modal-close');
+    const cleanupBtn = overlay.querySelector('#error-modal-cleanup');
+
+    closeBtn.addEventListener('click', () => {
+        overlay.classList.remove('active');
+    });
+
+    cleanupBtn.addEventListener('click', async () => {
+        overlay.classList.remove('active');
+        // Trigger Clean Canvas Logic
+        ui.elements.btnClearCanvas.click();
+    });
+
+    return overlay;
+}
+
+function showErrorModal(message) {
+    const overlay = createErrorModal();
+    const msgEl = overlay.querySelector('#error-modal-message');
+    msgEl.textContent = message;
+    overlay.classList.add('active');
+}
+
 // Trajectory Preview
 async function updateTrajectoryPreview() {
     if (!jointVisualizer) return;
@@ -130,12 +185,24 @@ async function updateTrajectoryPreview() {
     // But if we are in drawing mode, appState.trajectory is updated by CanvasHandler.
 
     const result = await API.computeTrajectory(appState.settings);
-    if (result) {
-        jointVisualizer.setTrajectoryData(result.q1, result.q2);
-        if (timeVisualizer && result.t) {
-            timeVisualizer.setPlannedPath(result.t, result.q1, result.q2);
-            if (result.t.length > 0) {
-                appState.expectedDuration = result.t[result.t.length - 1];
+
+    if (result && result.status === 'error') {
+        // Show error only if it's not a transient 'empty' state
+        if (result.message && !result.message.includes("No data")) {
+            showErrorModal(result.message);
+        }
+        jointVisualizer.setTrajectoryData([], []);
+        if (timeVisualizer) timeVisualizer.setPlannedPath([], [], []);
+        return;
+    }
+
+    if (result && result.status === 'success' && result.data) {
+        const data = result.data;
+        jointVisualizer.setTrajectoryData(data.q1, data.q2);
+        if (timeVisualizer && data.t) {
+            timeVisualizer.setPlannedPath(data.t, data.q1, data.q2);
+            if (data.t.length > 0) {
+                appState.expectedDuration = data.t[data.t.length - 1];
             }
         }
     } else {
@@ -162,12 +229,17 @@ ui.elements.btnSend.addEventListener('click', async () => {
     appState.startTime = Date.now() / 1000;
 
     try {
-        await API.sendData(appState.settings);
+        const result = await API.sendData(appState.settings);
+        if (result && result.status === 'error') {
+            showErrorModal(result.message);
+            return;
+        }
+
         appState.moveToSent();
         if (canvasHandler) canvasHandler.resize();
     } catch (e) {
         console.error("Send Failed:", e);
-        alert("Failed to send trajectory: " + e);
+        showErrorModal("Failed to send trajectory: " + e);
     }
 });
 
