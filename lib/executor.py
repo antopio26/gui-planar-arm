@@ -84,10 +84,11 @@ class TrajectoryExecutor:
             sent_count = limit
             
             # Update State for UI Visualization (Commanded Position)
+            current_idx = min(limit - 1, num_points - 1)
             # REMOVED to prevent race condition with Serial Monitor feedback
             # state.firmware.q0 = data['q'][0][current_idx]
             # state.firmware.q1 = data['q'][1][current_idx]
-            # state.firmware.penup = data['q'][2][current_idx]
+            state.firmware.penup = data['q'][2][current_idx] # RESTORED: No race condition here, and needed for UI
             
             if sent_count % 100 == 0:
                 print(f"Progress: {sent_count}/{num_points}")
