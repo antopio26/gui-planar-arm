@@ -54,7 +54,7 @@ class TrajectoryExecutor:
             
         # 2. Main Execution Loop
         next_wake = time()
-        tc_period = 0.04 # Target period (could be optimized)
+        tc_period = BATCH_SIZE * SETTINGS['Tc'] # Match rate to consumption
         
         while sent_count < num_points:
             if state.stop_requested:
@@ -84,10 +84,10 @@ class TrajectoryExecutor:
             sent_count = limit
             
             # Update State for UI Visualization (Commanded Position)
-            current_idx = min(limit - 1, num_points - 1)
-            state.firmware.q0 = data['q'][0][current_idx]
-            state.firmware.q1 = data['q'][1][current_idx]
-            state.firmware.penup = data['q'][2][current_idx]
+            # REMOVED to prevent race condition with Serial Monitor feedback
+            # state.firmware.q0 = data['q'][0][current_idx]
+            # state.firmware.q1 = data['q'][1][current_idx]
+            # state.firmware.penup = data['q'][2][current_idx]
             
             if sent_count % 100 == 0:
                 print(f"Progress: {sent_count}/{num_points}")
@@ -97,8 +97,9 @@ class TrajectoryExecutor:
         else:
             print(f"TRJ SENT COMPLETE: {num_points} points")
             # Ensure final position is set
-            state.firmware.q0 = data['q'][0][-1]
-            state.firmware.q1 = data['q'][1][-1]
+            # REMOVED: Rely on Feedback
+            # state.firmware.q0 = data['q'][0][-1]
+            # state.firmware.q1 = data['q'][1][-1]
             
             # Wait for the trajectory to finish physically
             total_duration = num_points * SETTINGS['Tc']

@@ -23,7 +23,7 @@ def read_position_cartesian(sizes=None) -> list[float]:
 
     q_actual = state.last_known_q[:]
     if SETTINGS['ser_started']:
-        scm.ser.reset_input_buffer()
+        # scm.ser.reset_input_buffer() # REMOVED: Dangerous with persistent monitor thread
         packet = bp.encode_pos_command()
         scm.write_data(packet)
         
