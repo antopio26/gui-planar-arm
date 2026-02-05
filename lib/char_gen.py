@@ -160,19 +160,41 @@ def sample_ellipse(center, radii, arc, steps=None):
 
 def text_to_traj(text: str, start_pos: tuple, font_size: float, char_spacing: float):
     """
-    Generates a list of line segments for the given text.
-    Handles 'line' and 'ellipse' primitives by sampling them into dense lines.
+    Generates a list of patches for the given text.
+    Groups contiguous segments into 'polyline' patches for smoother execution.
     """
     traj_patches = []
     cursor_x, cursor_y = start_pos
     
+    pending_points = []
+
+    def flush_pending():
+        nonlocal pending_points
+        if not pending_points: return
+
+        # If only one point (shouldn't happen with correct logic, but safety),
+        # cannot make a polyline.
+        if len(pending_points) < 2:
+            pending_points = []
+            return
+
+        patch = {
+            'type': 'polyline',
+            'points': pending_points,
+            'data': {'penup': False}
+        }
+        traj_patches.append(patch)
+        pending_points = []
+
     for char in text:
         if char == '\n':
+            flush_pending()
             cursor_x = start_pos[0]
             cursor_y -= font_size * 1.5 
             continue
 
         if char == ' ':
+            flush_pending()
             cursor_x += (font_size * 0.8) + char_spacing
             continue
 
@@ -197,31 +219,65 @@ def text_to_traj(text: str, start_pos: tuple, font_size: float, char_spacing: fl
                 wy = cursor_y + p[1] * font_size
                 world_points.append((wx, wy))
             
-            # 3. Create Segments
-            for i in range(len(world_points) - 1):
-                p0 = world_points[i]
-                p1 = world_points[i+1]
+            # 3. Accumulate Points for Polyline
+            start_pt = world_points[0]
+            
+            # Check continuity with pending points
+            if pending_points:
+                last_pt = pending_points[-1]
+                dist = ((last_pt[0]-start_pt[0])**2 + (last_pt[1]-start_pt[1])**2)**0.5
                 
-                patch = {
-                    'type': 'line',
-                    'points': [p0, p1],
-                    'data': {'penup': False}
-                }
-                
-                # Check discontinuity with previous patch to insert PENUP
-                if traj_patches:
-                    prev_end = traj_patches[-1]['points'][1]
-                    dist = ((prev_end[0]-p0[0])**2 + (prev_end[1]-p0[1])**2)**0.5
+                if dist > 0.001:
+                    # Discontinuity -> End current polyline
+                    flush_pending()
                     
-                    if dist > 0.001:
+                    # Add PENUP from previous patch end to new start
+                    # Previous patch end is effectively 'last_pt' (which was just flushed)
+                    # We need to add the penup stroke.
+                    if traj_patches:
+                        # traj_patches[-1] is the just-flushed polyline
+                        prev_end = traj_patches[-1]['points'][-1]
                         traj_patches.append({
                             'type': 'line',
-                            'points': [prev_end, p0],
+                            'points': [prev_end, start_pt],
                             'data': {'penup': True}
                         })
-                
-                traj_patches.append(patch)
+                    pending_points.append(start_pt)
+                else:
+                    # Continuous -> extend pending (don't duplicate the join point if it's exact)
+                    # norm_points usually includes start point.
+                    pass 
+            else:
+                 # No pending points. Check continuity with previous COMPLETED patch for PenUp
+                 if traj_patches:
+                     # Get last point of last patch
+                     last_patch_points = traj_patches[-1]['points']
+                     prev_end = last_patch_points[-1] # Works for polyline (list) or line (2-list)
+                     
+                     dist = ((prev_end[0]-start_pt[0])**2 + (prev_end[1]-start_pt[1])**2)**0.5
+                     if dist > 0.001:
+                         traj_patches.append({
+                            'type': 'line',
+                            'points': [prev_end, start_pt],
+                            'data': {'penup': True}
+                        })
+                 pending_points.append(start_pt)
+
+            # Append new points
+            # If we just connected continuously, start_pt might verify == last_pt. 
+            # If so, skip it to avoid zero-length segment?
+            # Or just append. Polyline logic handle 0 length? Better avoid.
+            start_idx = 1 if (len(pending_points) > 1 and pending_points[-2] == start_pt) else 1
+            # Actually, `pending_points` already has `start_pt` added in the logic above (either appended or new).
+            # Wait, `pending_points.append(start_pt)` is inside the if/else blocks.
+            # So `start_pt` is IN `pending_points`.
+            # We need to extend `world_points[1:]`.
+            
+            pending_points.extend(world_points[1:])
 
         cursor_x += (font_size * 0.8) + char_spacing
+
+    # Flush any remaining
+    flush_pending()
 
     return traj_patches

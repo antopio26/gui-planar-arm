@@ -363,6 +363,14 @@ API.initCallbacks({
                         'radius': r
                     }
                 };
+            } else if (t.type === 'polyline') {
+                const points = t.data[0];
+                const penup = t.data[1];
+                item = {
+                    'type': 'polyline',
+                    'points': points.map(pt => [pt.actX, pt.actY]),
+                    'data': { 'penup': penup }
+                };
             }
             payload.push(item);
         }

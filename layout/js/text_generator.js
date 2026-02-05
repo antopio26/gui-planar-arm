@@ -147,6 +147,17 @@ export class TextGenerator {
                         type: 'line',
                         data: [p0, p1, patch.data.penup]
                     });
+                } else if (patch.type === 'polyline') {
+                    const points = patch.points.map(pt => {
+                        const p = new Point(0, 0, this.state.settings);
+                        p.actX = pt[0];
+                        p.actY = pt[1];
+                        return p;
+                    });
+                    this.state.trajectory.data.push({
+                        type: 'polyline',
+                        data: [points, patch.data.penup]
+                    });
                 }
             });
         }

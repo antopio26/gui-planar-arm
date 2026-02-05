@@ -48,6 +48,12 @@ export class Trajectory {
 
                 traj.data[2] = v1.angle() + Math.PI; // theta_0
                 traj.data[3] = v2.angle() + Math.PI; // theta_1
+            } else if (traj.type === 'polyline') {
+                // data: [points_array, penup]
+                const points = traj.data[0];
+                for (let p of points) {
+                    p.updateRelative();
+                }
             }
         }
     }
@@ -89,6 +95,15 @@ export class Trajectory {
                 const p1 = traj.data[1];
                 ctx.moveTo(p0.relX, p0.relY);
                 ctx.lineTo(p1.relX, p1.relY);
+            } else if (traj.type === 'polyline') {
+                const points = traj.data[0];
+                const penup = traj.data[1];
+                if (points.length > 0) {
+                     ctx.moveTo(points[0].relX, points[0].relY);
+                     for (let i = 1; i < points.length; i++) {
+                         ctx.lineTo(points[i].relX, points[i].relY);
+                     }
+                }
             } else if (traj.type === 'circle') {
                 const c = traj.data[0];
                 const r = traj.data[1];

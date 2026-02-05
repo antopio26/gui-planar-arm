@@ -412,9 +412,11 @@ def ik(x:float, y:float, z:float = 0, theta:float = None, sizes:dict[float] = {'
 - ndarray: column numpy array containing the values of the coordinates of the end effector (x, y and the rotation angle theta).
 @# """
 def dk(q:np.ndarray, sizes:dict[float] = {'l1':0.170,'l2':0.158})->np.ndarray:
-    x = sizes['l1']*cos(q[0])+sizes['l2']*cos(q[0]+q[1])
-    y = sizes['l1']*sin(q[0])+sizes['l2']*sin(q[0]+q[1])
-    theta = q[0]+q[1]
+    q1 = float(q[0,0] if q.ndim > 1 else q[0])
+    q2 = float(q[1,0] if q.ndim > 1 else q[1])
+    x = sizes['l1']*cos(q1)+sizes['l2']*cos(q1+q2)
+    y = sizes['l1']*sin(q1)+sizes['l2']*sin(q1+q2)
+    theta = q1+q2
     return np.array([[x,y,theta]]).T
 
 """
@@ -605,10 +607,24 @@ def slice_trj(patch: dict, **kargs):
         d_alpha = (2*pi+v2.angle())%(2*pi) - (2*pi+v1.angle())%(2*pi) # between 0 and 2pi
         angle = d_alpha if abs(d_alpha) < pi else (-(2*pi-d_alpha) if d_alpha > 0 else 2*pi+d_alpha) # angle between the two vectors starting from the center of the circumference
 
-    # length = l if patch['type'] == 'line' else patch['data']['radius']*abs(angle) # LENGTH OF THE PATH
-    # NOTE: changed for testing purposes -> change when real accelerations values are found
-    length = l if patch['type'] == 'line' else abs(angle)*radius # LENGTH OF THE PATH
-    tf = sqrt(2*pi*length/kargs['max_acc']) # duration of the motion
+    if patch['type'] == 'polyline':
+        # Polyline Logic: Interpolate across multiple points based on total length
+        pts = [Point(*p) for p in patch['points']]
+        Ls = []
+        total_len = 0
+        for i in range(len(pts)-1):
+            d = (pts[i+1]-pts[i]).mag()
+            Ls.append(d)
+            total_len += d
+        
+        # Calculate duration based on total length
+        tf = sqrt(2*pi*total_len*(1.0) / kargs['max_acc']) # Added factor for safety/tuning if needed
+        print(f"[DEBUG] Polyline Slicing: Pts={len(pts)}, Len={total_len:.4f}, Acc={kargs['max_acc']}, Tf={tf:.4f}")
+    else:
+        # length = l if patch['type'] == 'line' else patch['data']['radius']*abs(angle) # LENGTH OF THE PATH
+        # NOTE: changed for testing purposes -> change when real accelerations values are found
+        length = l if patch['type'] == 'line' else abs(angle)*radius # LENGTH OF THE PATH
+        tf = sqrt(2*pi*length/kargs['max_acc']) # duration of the motion
 
     points = [] # points (in operational space)
     if patch['data']['penup']:
@@ -616,10 +632,30 @@ def slice_trj(patch: dict, **kargs):
         # patch['points'] -> [[x0, y0], [x1, y1]]
         k_sz = kargs['sizes']
         
+        # DEBUG: Check Start Continuity
+        if q_prev is not None:
+             dk_res = dk(q_prev, k_sz) # q_prev is [[q1],[q2],[z]] or similar
+             curr_x, curr_y = dk_res[0,0], dk_res[1,0]
+             target_x, target_y = patch['points'][0][0], patch['points'][0][1]
+             dist_sq = (curr_x-target_x)**2 + (curr_y-target_y)**2
+             if dist_sq > 0.0001:
+                  print(f"[DEBUG] PenUp Start Cartesian Drift: dist={sqrt(dist_sq):.6f}")
+                  print(f"        Robot: ({curr_x:.4f}, {curr_y:.4f})")
+                  print(f"        Patch: ({target_x:.4f}, {target_y:.4f})")
+
         # Calculate Start Joint Config (Continuous with previous)
         res0 = ik(patch['points'][0][0], patch['points'][0][1], 1, None, k_sz, limits, seed_q=q_prev)
         if res0 is None: raise Exception(f"IK Failed for Start Point {patch['points'][0]}")
         qt0 = list(res0.T[0])
+        
+        if q_prev is not None:
+             q_prev_list = list(q_prev.T[0])
+             j_dist = (qt0[0]-q_prev_list[0])**2 + (qt0[1]-q_prev_list[1])**2
+             if j_dist > 0.01:
+                  print(f"[DEBUG] IK JUMP at PenUp Start: {sqrt(j_dist):.4f} rad")
+                  print(f"        Prev Q: {q_prev_list}")
+                  print(f"        New Q:  {qt0}")
+                  print(f"        Seed Used: {q_prev_list}")
         
         # Calculate End Joint Config (Continuous with Start)
         res1 = ik(patch['points'][1][0], patch['points'][1][1], 1, None, k_sz, limits, seed_q=res0)
@@ -646,6 +682,28 @@ def slice_trj(patch: dict, **kargs):
         for t in rangef(0, kargs['Tc'], tf, True):
             s = kargs['circle'](t, tf)
             points.append(c+(sp-c).rotate(s*angle))
+            ts.append(t)
+    elif patch['type'] == 'polyline':
+        for t in rangef(0, kargs['Tc'], tf, True):
+            s_norm = kargs['line'](t, tf) # Normalized s [0, 1]
+            s = s_norm * total_len # Actual distance along polyline
+            
+            # Find which segment 's' falls into
+            curr_dist = 0
+            found = False
+            for i, seg_len in enumerate(Ls):
+                if curr_dist + seg_len >= s:
+                    # Interpolate in this segment
+                    remain = s - curr_dist
+                    ratio = remain / seg_len if seg_len > 0 else 0
+                    p_interp = pts[i] + (pts[i+1]-pts[i]) * ratio
+                    points.append(p_interp)
+                    found = True
+                    break
+                curr_dist += seg_len
+            
+            if not found:
+                 points.append(pts[-1])
             ts.append(t)
 
     for p in points:

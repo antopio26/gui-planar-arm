@@ -210,7 +210,7 @@ def py_compute_trajectory(settings_override=None):
 
     except Exception as e:
         print(f"Error in py_compute_trajectory: {e}")
-        # traceback.print_exc()
+        traceback.print_exc()
         return {'status': 'error', 'message': str(e)}
 
 @eel.expose
