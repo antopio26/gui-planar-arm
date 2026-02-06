@@ -12,10 +12,10 @@ SETTINGS = {
 
 # Speed Profiles (rad/s, rad/s^2)
 SPEED_PROFILES = {
-    'default': {'max_speed': 1.0, 'max_acc': 0.1},
+    'default': {'max_speed': 1.0, 'max_acc': 0.5},
     'linear':  {'max_speed': 1.0, 'max_acc': 0.1},
-    'curve':   {'max_speed': 1.0, 'max_acc': 0.1}, # Slower for curves
-    'jump':    {'max_speed': 1.0, 'max_acc': 0.1}, # Fast for pen-up moves
+    'curve':   {'max_speed': 1.0, 'max_acc': 0.02}, # Slower for curves
+    'jump':    {'max_speed': 2.0, 'max_acc': 0.1}, # Fast for pen-up moves
 }
 
 # Serial Configuration

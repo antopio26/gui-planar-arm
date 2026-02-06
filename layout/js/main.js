@@ -355,10 +355,11 @@ API.initCallbacks({
                 const p0 = t.data[0];
                 const p1 = t.data[1];
                 const penup = t.data[2];
+                const profile = t.data[3] || (penup ? 'jump' : 'linear');
                 item = {
                     'type': 'line',
                     'points': [[p0.actX, p0.actY], [p1.actX, p1.actY]],
-                    'data': { 'penup': penup }
+                    'data': { 'penup': penup, 'profile': profile }
                 };
             } else if (t.type === 'circle') {
                 const c = t.data[0];
@@ -366,22 +367,25 @@ API.initCallbacks({
                 const penup = t.data[4];
                 const a = t.data[5];
                 const p = t.data[6];
+                const profile = t.data[7] || (penup ? 'jump' : 'curve');
                 item = {
                     'type': 'circle',
                     'points': [[a.actX, a.actY], [p.actX, p.actY]],
                     'data': {
                         'penup': penup,
                         'center': [c.actX, c.actY],
-                        'radius': r
+                        'radius': r,
+                        'profile': profile
                     }
                 };
             } else if (t.type === 'polyline') {
                 const points = t.data[0];
                 const penup = t.data[1];
+                const profile = t.data[2] || (penup ? 'jump' : 'default');
                 item = {
                     'type': 'polyline',
                     'points': points.map(pt => [pt.actX, pt.actY]),
-                    'data': { 'penup': penup }
+                    'data': { 'penup': penup, 'profile': profile }
                 };
             }
             payload.push(item);

@@ -56,6 +56,8 @@ def generate_trajectory_data(data_points, current_sizes, current_limits, current
         # For now, let's trust the profile, but ensure we don't exceed global max_acc used in validation
         # SETTINGS['max_acc'] is essentially the default/global max.
         
+        print(f"[DEBUG] Handler: Patch='{patch['type']}', Profile='{profile_name}' -> MaxSpeed={profile['max_speed']}, MaxAcc={profile['max_acc']}")
+
         (q0s_p, q1s_p, penups_p, ts_p) = tpy.slice_trj(
             patch, 
             Tc=SETTINGS['Tc'],

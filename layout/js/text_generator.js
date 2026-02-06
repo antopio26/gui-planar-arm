@@ -156,7 +156,7 @@ export class TextGenerator {
                     });
                     this.state.trajectory.data.push({
                         type: 'polyline',
-                        data: [points, patch.data.penup]
+                        data: [points, patch.data.penup, patch.data.profile]
                     });
                 }
             });

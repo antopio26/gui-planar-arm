@@ -638,6 +638,7 @@ def slice_trj(patch: dict, **kargs):
         tf_acc = sqrt(2*pi*length/kargs['max_acc'])
         tf_vel = (2 * length) / kargs['max_speed']
         tf = max(tf_acc, tf_vel)
+        print(f"[DEBUG] Primitive Slicing: Type={patch['type']}, Len={length:.4f}, Acc={kargs['max_acc']}, Vmax={kargs['max_speed']} -> Tf={tf:.4f} (Ta={tf_acc:.4f}, Tv={tf_vel:.4f})")
 
 
     points = [] # points (in operational space)
