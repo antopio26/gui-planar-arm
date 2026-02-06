@@ -71,11 +71,34 @@ export class UI {
 
     setSerialStatus(isOnline) {
         if (isOnline) {
+            this.elements.statusDot.classList.remove('connecting'); // Ensure connecting is removed
             this.elements.statusDot.classList.add('online');
             this.elements.statusText.textContent = "Connected";
         } else {
+            this.elements.statusDot.classList.remove('connecting'); // Ensure connecting is removed
             this.elements.statusDot.classList.remove('online');
             this.elements.statusText.textContent = "Disconnected";
+        }
+    }
+
+    setConnecting(isConnecting) {
+        if (isConnecting) {
+            this.elements.statusDot.classList.remove('online');
+            this.elements.statusDot.classList.add('connecting');
+            this.elements.statusText.textContent = "Connecting...";
+            
+            this.elements.btnConnect.disabled = true;
+            this.elements.btnConnect.textContent = "Connecting...";
+            this.elements.selectPort.disabled = true;
+            this.elements.btnRefresh.disabled = true;
+        } else {
+            this.elements.statusDot.classList.remove('connecting');
+            // Status text/color will be set by setSerialStatus immediately after
+            
+            this.elements.btnConnect.disabled = false;
+            this.elements.btnConnect.textContent = "Connect Serial";
+            this.elements.selectPort.disabled = false;
+            this.elements.btnRefresh.disabled = false;
         }
     }
 

@@ -45,6 +45,7 @@ class StateManager {
         this.startTime = null; // For Time Plot synchronization
 
         this.isSerialOnline = false;
+        this.isConnecting = false;
 
         this.manipulator = null;
         this.trajectory = null;

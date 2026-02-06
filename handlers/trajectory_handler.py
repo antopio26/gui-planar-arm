@@ -78,4 +78,23 @@ def generate_trajectory_data(data_points, current_sizes, current_limits, current
         if len(q0s_p) > 0:
             current_joint_pos = [q0s_p[-1], q1s_p[-1]]
             
+    # FINAL CHECK: If the last point has pen down, lift it up
+    if len(penups) > 0 and penups[-1] == 0:
+        # Stationary "dwell" time to allow pen up
+        DWELL_TIME = 0.1 # seconds
+        dwell_steps = int(DWELL_TIME / SETTINGS['Tc'])
+        if dwell_steps < 1: dwell_steps = 1
+        
+        last_q0 = q0s[-1]
+        last_q1 = q1s[-1]
+        last_t = ts[-1]
+        
+        for i in range(dwell_steps):
+            q0s.append(last_q0)
+            q1s.append(last_q1)
+            penups.append(1) # FORCE PEN UP
+            ts.append(last_t + (i+1)*SETTINGS['Tc'])
+            
+        current_joint_pos = [last_q0, last_q1]
+            
     return q0s, q1s, penups, ts, current_joint_pos

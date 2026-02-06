@@ -269,10 +269,21 @@ async function populateSerialPorts() {
 ui.elements.btnRefresh.addEventListener('click', populateSerialPorts);
 ui.elements.btnConnect.addEventListener('click', async () => {
     const selectedPort = ui.elements.selectPort.value;
-    await API.startSerial(selectedPort);
-    const isOnline = await API.getSerialStatus();
-    ui.setSerialStatus(isOnline);
-    appState.isSerialOnline = isOnline;
+    
+    ui.setConnecting(true); // Start connecting state
+    appState.isConnecting = true; // Set state to prevent interval interference
+    
+    try {
+        await API.startSerial(selectedPort);
+    } catch (e) {
+        console.error("Serial Start Failed:", e);
+    } finally {
+        appState.isConnecting = false; // Reset state
+        const isOnline = await API.getSerialStatus();
+        ui.setConnecting(false); // Stop connecting state (restore buttons)
+        ui.setSerialStatus(isOnline); // Update final status
+        appState.isSerialOnline = isOnline;
+    }
 });
 
 // Initial Population & Status
@@ -283,6 +294,7 @@ API.getSerialStatus().then(isOnline => {
 });
 
 setInterval(async () => {
+    if (appState.isConnecting) return; // Skip update if connecting
     const isOnline = await API.getSerialStatus();
     ui.setSerialStatus(isOnline);
     appState.isSerialOnline = isOnline;

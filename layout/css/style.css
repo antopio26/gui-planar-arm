@@ -157,6 +157,18 @@ canvas {
     box-shadow: 0 0 5px rgba(0, 200, 81, 0.4);
 }
 
+.status-dot.connecting {
+    background-color: var(--warning-color);
+    box-shadow: 0 0 5px rgba(255, 187, 51, 0.4);
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
 /* Toasts / Notifications (Optional for future) */
 .notification {
     position: fixed;
@@ -270,6 +282,7 @@ select {
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
     -webkit-appearance: none;
+    appearance: none;
     margin: 0;
 }
 
