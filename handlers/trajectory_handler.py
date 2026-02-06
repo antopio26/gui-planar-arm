@@ -1,6 +1,6 @@
 import numpy as np
 from lib import trajpy as tpy
-from config import SIZES, SETTINGS, MAX_SPEED_RAD, MAX_ACC_TOLERANCE_FACTOR
+from config import SIZES, SETTINGS, MAX_SPEED_RAD, MAX_ACC_TOLERANCE_FACTOR, SPEED_PROFILES
 
 def validate_trajectory_dynamics(q, dq, ddq):
     print("\n--- TRAJECTORY VALIDATION ---")
@@ -45,10 +45,22 @@ def generate_trajectory_data(data_points, current_sizes, current_limits, current
     q0s, q1s, penups, ts = [], [], [], []
     
     for patch in data_points:
+        # Determine Profile
+        profile_name = patch.get('data', {}).get('profile', 'default')
+        if patch.get('data', {}).get('penup'):
+            profile_name = 'jump'
+        
+        profile = SPEED_PROFILES.get(profile_name, SPEED_PROFILES['default'])
+        
+        # Override with global settings if they are stricter? 
+        # For now, let's trust the profile, but ensure we don't exceed global max_acc used in validation
+        # SETTINGS['max_acc'] is essentially the default/global max.
+        
         (q0s_p, q1s_p, penups_p, ts_p) = tpy.slice_trj(
             patch, 
             Tc=SETTINGS['Tc'],
-            max_acc=SETTINGS['max_acc'],
+            max_acc=profile['max_acc'],
+            max_speed=profile['max_speed'],
             line=SETTINGS['line_tl'],
             circle=SETTINGS['circle_tl'],
             sizes=current_sizes,

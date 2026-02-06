@@ -16,6 +16,9 @@ Supports 'line' (list of points) and 'ellipse' (parametric).
 
 import math
 
+# Characters that should use the slower "curve" profile
+CURVED_CHARS = {'B', 'C', 'D', 'G', 'J', 'O', 'P', 'Q', 'R', 'S', 'U', '0', '2', '3', '5', '6', '8', '9'}
+
 # Character definitions
 # Format: List of Primitives.
 # Primitive: 
@@ -177,14 +180,29 @@ def text_to_traj(text: str, start_pos: tuple, font_size: float, char_spacing: fl
         if len(pending_points) < 2:
             pending_points = []
             return
+            
+        # Determine profile based on character type
+        # Ideally we know which character we are processing. 
+        # But 'pending_points' could theoretically span characters if we didn't force flush on space/newline?
+        # The logic below flushes on space/newline, so pending_points usually belongs to one word or segment.
+        # But wait, we iterate char by char.
+        # We need to know if the CURRENT pending points belong to a curved char.
+        # We can track the "most recent character" or just assign 'curve' if ANY char in the buffer was curved?
+        # Actually, `text_to_traj` iterates chars. We should probably track the `current_profile` property.
+        
+        patch_profile = 'curve' if is_curved_sequence else 'linear'
 
         patch = {
             'type': 'polyline',
             'points': pending_points,
-            'data': {'penup': False}
+            'data': {'penup': False, 'profile': patch_profile}
         }
         traj_patches.append(patch)
         pending_points = []
+        # Reset curve flag after flush? Or is it handled by char loop?
+        # It's better to flush when profile changes.
+
+    is_curved_sequence = False # Track if current pending sequence contains curved shapes
 
     for char in text:
         if char == '\n':
@@ -197,6 +215,14 @@ def text_to_traj(text: str, start_pos: tuple, font_size: float, char_spacing: fl
             flush_pending()
             cursor_x += (font_size * 0.8) + char_spacing
             continue
+
+        # Check if we need to switch profile
+        char_is_curved = char.upper() in CURVED_CHARS
+        if pending_points and char_is_curved != is_curved_sequence:
+             # Profile mismatch, flush previous
+             flush_pending()
+        
+        is_curved_sequence = char_is_curved
 
         primitives = get_char_strokes(char)
         char_width = font_size
@@ -232,20 +258,48 @@ def text_to_traj(text: str, start_pos: tuple, font_size: float, char_spacing: fl
                     flush_pending()
                     
                     # Add PENUP from previous patch end to new start
-                    # Previous patch end is effectively 'last_pt' (which was just flushed)
-                    # We need to add the penup stroke.
                     if traj_patches:
-                        # traj_patches[-1] is the just-flushed polyline
                         prev_end = traj_patches[-1]['points'][-1]
                         traj_patches.append({
                             'type': 'line',
                             'points': [prev_end, start_pt],
-                            'data': {'penup': True}
+                            'data': {'penup': True, 'profile': 'jump'}
                         })
                     pending_points.append(start_pt)
                 else:
-                    # Continuous -> extend pending (don't duplicate the join point if it's exact)
-                    # norm_points usually includes start point.
+                    # Continuous - CHECK FOR SHARP CORNER
+                    # We have pending_points (last_pt) and world_points (start_pt is 0, next is 1)
+                    # We need the vector ending at last_pt (v_in) and vector starting at start_pt (v_out)
+                    
+                    if len(pending_points) >= 2 and len(world_points) >= 2:
+                        p_prev = pending_points[-2]
+                        p_curr = pending_points[-1] # == start_pt roughly
+                        p_next = world_points[1] # Next point in new primitive
+                        
+                        v_in = (p_curr[0]-p_prev[0], p_curr[1]-p_prev[1])
+                        v_out = (p_next[0]-p_curr[0], p_next[1]-p_curr[1])
+                        
+                        mag_in = math.sqrt(v_in[0]**2 + v_in[1]**2)
+                        mag_out = math.sqrt(v_out[0]**2 + v_out[1]**2)
+                        
+                        if mag_in > 1e-6 and mag_out > 1e-6:
+                            dot = v_in[0]*v_out[0] + v_in[1]*v_out[1]
+                            similarity = dot / (mag_in * mag_out)
+                            # similarity = cos(theta). 1=straight, 0=90deg turn, -1=180turn
+                            # Threshold: if angle > 45 deg, split.
+                            # 45 deg -> cos(45) = 0.707
+                            # So if similarity < 0.707, it's a sharp turn.
+                            if similarity < 0.707:
+                                # Sharp Corner Detected!
+                                flush_pending()
+                                # We don't need a pen-up, just a split to force zero velocity stop.
+                                pending_points.append(start_pt)
+                            else:
+                                # Smooth enough to continue
+                                pass
+                        else:
+                             pass
+                    
                     pass 
             else:
                  # No pending points. Check continuity with previous COMPLETED patch for PenUp
@@ -259,7 +313,7 @@ def text_to_traj(text: str, start_pos: tuple, font_size: float, char_spacing: fl
                          traj_patches.append({
                             'type': 'line',
                             'points': [prev_end, start_pt],
-                            'data': {'penup': True}
+                            'data': {'penup': True, 'profile': 'jump'}
                         })
                  pending_points.append(start_pt)
 
@@ -273,7 +327,32 @@ def text_to_traj(text: str, start_pos: tuple, font_size: float, char_spacing: fl
             # So `start_pt` is IN `pending_points`.
             # We need to extend `world_points[1:]`.
             
-            pending_points.extend(world_points[1:])
+            # Append new points loop
+            for i in range(1, len(world_points)):
+                next_pt = world_points[i]
+                
+                # Check for sharp corner with previous segment
+                if len(pending_points) >= 2:
+                    p_prev = pending_points[-2]
+                    p_curr = pending_points[-1]
+                    p_next = next_pt
+                    
+                    v_in = (p_curr[0]-p_prev[0], p_curr[1]-p_prev[1])
+                    v_out = (p_next[0]-p_curr[0], p_next[1]-p_curr[1])
+                    
+                    mag_in = math.sqrt(v_in[0]**2 + v_in[1]**2)
+                    mag_out = math.sqrt(v_out[0]**2 + v_out[1]**2)
+                    
+                    if mag_in > 1e-6 and mag_out > 1e-6:
+                        dot = v_in[0]*v_out[0] + v_in[1]*v_out[1]
+                        similarity = dot / (mag_in * mag_out)
+                        if similarity < 0.707: # 45 degrees
+                            # Sharp corner!
+                            flush_pending()
+                            # Start new segment from the vertex
+                            pending_points.append(p_curr)
+                            
+                pending_points.append(next_pt)
 
         cursor_x += (font_size * 0.8) + char_spacing
 

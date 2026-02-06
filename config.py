@@ -10,13 +10,21 @@ SETTINGS = {
     'circle_tl': lambda t, tf: tpy.cycloidal([0, 1], 2, tf)[0][0](t)  # timing laws for circle
 }
 
+# Speed Profiles (rad/s, rad/s^2)
+SPEED_PROFILES = {
+    'default': {'max_speed': 1.0, 'max_acc': 0.1},
+    'linear':  {'max_speed': 1.0, 'max_acc': 0.1},
+    'curve':   {'max_speed': 1.0, 'max_acc': 0.1}, # Slower for curves
+    'jump':    {'max_speed': 1.0, 'max_acc': 0.1}, # Fast for pen-up moves
+}
+
 # Serial Configuration
 SERIAL_PORT = None # Auto-detect
 
 # Robot Physical Dimensions
 SIZES = {
-    'l1': 0.170,
-    'l2': 0.158
+    'l1': 0.128,
+    'l2': 0.144
 }
 
 # Joint Limits (Radians)
@@ -37,8 +45,8 @@ WEB_OPTIONS = {
 TEXT_OPTIONS = {
     'mode': 'linear',
     'fontSize': 0.04, # Slightly smaller for safety
-    'x': 0.22,
-    'y': 0.17,
+    'x': 0.17,
+    'y': 0.1,
     'angle': -90,
     'radius': 0.20,
     'offset': 90

@@ -574,6 +574,9 @@ def slice_trj(patch: dict, **kargs):
     # populate arguments with default values
     if 'max_acc' not in kargs:
         kargs['max_acc'] = 1.05
+    if 'max_speed' not in kargs:
+        kargs['max_speed'] = 5.0 # Default max speed if not specified
+        
     if 'line' not in kargs or 'circle' not in kargs:
         raise Exception("No line or circle timing law was specified")
     if 'Tc' not in kargs:
@@ -618,13 +621,24 @@ def slice_trj(patch: dict, **kargs):
             total_len += d
         
         # Calculate duration based on total length
-        tf = sqrt(2*pi*total_len*(1.0) / kargs['max_acc']) # Added factor for safety/tuning if needed
-        print(f"[DEBUG] Polyline Slicing: Pts={len(pts)}, Len={total_len:.4f}, Acc={kargs['max_acc']}, Tf={tf:.4f}")
+        # Constraints: 
+        # 1. Acceleration: tf >= sqrt(2*k*S / A) -> for cycloidal k=pi -> sqrt(2*pi*S / A)
+        # 2. Velocity: tf >= k*S / V -> for cycloidal k=2 -> 2*S / V
+        
+        tf_acc = sqrt(2*pi*total_len / kargs['max_acc'])
+        tf_vel = (2 * total_len) / kargs['max_speed']
+        tf = max(tf_acc, tf_vel)
+        
+        print(f"[DEBUG] Polyline Slicing: Pts={len(pts)}, Len={total_len:.4f}, Acc={kargs['max_acc']}, Vmax={kargs['max_speed']} -> Tf={tf:.4f} (Ta={tf_acc:.4f}, Tv={tf_vel:.4f})")
     else:
         # length = l if patch['type'] == 'line' else patch['data']['radius']*abs(angle) # LENGTH OF THE PATH
         # NOTE: changed for testing purposes -> change when real accelerations values are found
         length = l if patch['type'] == 'line' else abs(angle)*radius # LENGTH OF THE PATH
-        tf = sqrt(2*pi*length/kargs['max_acc']) # duration of the motion
+        
+        tf_acc = sqrt(2*pi*length/kargs['max_acc'])
+        tf_vel = (2 * length) / kargs['max_speed']
+        tf = max(tf_acc, tf_vel)
+
 
     points = [] # points (in operational space)
     if patch['data']['penup']:
