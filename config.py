@@ -29,10 +29,10 @@ SIZES = {
 
 # Joint Limits (Radians)
 JOINT_LIMITS = {
-    'q1_min': -2.06, # -118 deg
-    'q1_max': 1.57, # 118 deg
-    'q2_min': -2.34, # -136 deg
-    'q2_max': 2.06 # 136 deg
+    'q1_min': -2.07, # -118 deg
+    'q1_max': 2.37, # 118 deg
+    'q2_min': -2.4, # -136 deg
+    'q2_max': 2.3 # 136 deg 
 }
 
 # Web Server Options

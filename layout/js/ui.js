@@ -59,6 +59,8 @@ export class UI {
             // viz controls
             btnToggleFrames: document.getElementById('viz-toggle-frames'),
             btnToggleLimits: document.getElementById('viz-toggle-limits'),
+            btnToggleVel: document.getElementById('viz-toggle-vel'),
+            btnToggleForce: document.getElementById('viz-toggle-force'),
             monQ1: document.getElementById('mon-q1'),
             monQ2: document.getElementById('mon-q2'),
             monX: document.getElementById('mon-x'),

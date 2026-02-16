@@ -252,6 +252,11 @@ select {
     display: flex;
     gap: var(--spacing-xs);
     margin-bottom: var(--spacing-sm);
+    flex-wrap: wrap;
+
+    button {
+        min-width: 100px;
+    }
 }
 
 .btn.sm {

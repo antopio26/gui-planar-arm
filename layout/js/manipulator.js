@@ -9,6 +9,8 @@ export class Manipulator {
         // Default Viz Settings if not present
         if (this.settings.showFrames === undefined) this.settings.showFrames = false;
         if (this.settings.showLimits === undefined) this.settings.showLimits = true;
+        if (this.settings.showVelEllipse === undefined) this.settings.showVelEllipse = false;
+        if (this.settings.showForceEllipse === undefined) this.settings.showForceEllipse = false;
 
         // Calculate initial position
         const [p1, p2] = this.dk(q);
@@ -109,6 +111,86 @@ export class Manipulator {
         return { x, y };
     }
 
+    getJacobian(q) {
+        const l1 = this.settings['l1'];
+        const l2 = this.settings['l2'];
+        const s1 = Math.sin(q[0]);
+        const c1 = Math.cos(q[0]);
+        const s12 = Math.sin(q[0] + q[1]);
+        const c12 = Math.cos(q[0] + q[1]);
+
+        return [
+            [-l1 * s1 - l2 * s12, -l2 * s12],
+            [l1 * c1 + l2 * c12, l2 * c12]
+        ];
+    }
+
+    drawManipulabilityEllipse(ctx, origin, type) {
+        const J = this.getJacobian(this.q);
+        
+        // J * J^T calculation
+        const a = J[0][0] * J[0][0] + J[0][1] * J[0][1];
+        const b = J[0][0] * J[1][0] + J[0][1] * J[1][1]; // symmetric
+        const c = J[1][0] * J[1][0] + J[1][1] * J[1][1];
+
+        // Eigenvalues of JJ^T
+        const trace = a + c;
+        const det = a * c - b * b;
+        const term = Math.sqrt(Math.pow(trace, 2) / 4 - det);
+        
+        const lambda1 = trace / 2 + term;
+        const lambda2 = trace / 2 - term;
+
+        // Eigenvector angle
+        // theta = 0.5 * atan2(2b, a - c)
+        const theta = 0.5 * Math.atan2(2 * b, a - c);
+
+        // Semi-axes lengths
+        let axis1, axis2;
+        
+        // Scaling factor for visualization
+        const scale = 0.1; 
+
+        if (type === 'velocity') {
+            // Velocity: Ellipse of JJ^T
+            // axes ~ sqrt(eigenvalues)
+            axis1 = Math.sqrt(Math.abs(lambda1));
+            axis2 = Math.sqrt(Math.abs(lambda2));
+        } else {
+            // Force: Ellipse of (JJ^T)^-1
+            // axes ~ 1/sqrt(eigenvalues) (reciprocal of velocity axes)
+            axis1 = 1.0 / Math.sqrt(Math.abs(lambda1) + 1e-6); // avoid div/0
+            axis2 = 1.0 / Math.sqrt(Math.abs(lambda2) + 1e-6);
+        }
+
+        ctx.save();
+        ctx.translate(origin[0], origin[1]);
+        ctx.rotate(theta);
+        
+        ctx.beginPath();
+        if (type === 'velocity') {
+            ctx.strokeStyle = '#00FF00'; // Green for Velocity
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+            // Scale: Boost velocity visibility
+            // Typical length ~0.15. Target ~50px. Factor ~300.
+            // 0.1 * X = 300 => X = 3000.
+            const velScale = 3000;
+            ctx.ellipse(0, 0, axis1 * scale * velScale, axis2 * scale * velScale, 0, 0, 2 * Math.PI); 
+        } else {
+            ctx.strokeStyle = '#FF0000'; // Red for Force
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+            // Scale: Force is inverse. Typical ~7. Target ~50px. Factor ~7.
+            // 0.1 * X = 7 => X = 70.
+            const forceScale = 70;
+            ctx.ellipse(0, 0, axis1 * scale * forceScale, axis2 * scale * forceScale, 0, 0, 2 * Math.PI);
+        }
+        
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+    }
+
     // --- Drawing ---
 
     draw_pose(ctx) {
@@ -157,6 +239,14 @@ export class Manipulator {
             // End Effector Frame (Rotated by q1+q2)
             const q2 = this.q[1];
             this.drawFrame(ctx, this.end_eff[0], this.end_eff[1], -(q1 + q2));
+        }
+
+        // Draw Ellipses
+        if (this.settings.showVelEllipse) {
+            this.drawManipulabilityEllipse(ctx, this.end_eff, 'velocity');
+        }
+        if (this.settings.showForceEllipse) {
+            this.drawManipulabilityEllipse(ctx, this.end_eff, 'force');
         }
     }
 
