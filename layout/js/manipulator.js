@@ -165,20 +165,20 @@ export class Manipulator {
 
         ctx.save();
         ctx.translate(origin[0], origin[1]);
-        ctx.rotate(theta);
+        ctx.rotate(-theta);
         
         ctx.beginPath();
         if (type === 'velocity') {
-            ctx.strokeStyle = '#00FF00'; // Green for Velocity
-            ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+            ctx.strokeStyle = '#99e156ff'; // Pastel Purple
+            ctx.fillStyle = '#99e15633';
             // Scale: Boost velocity visibility
             // Typical length ~0.15. Target ~50px. Factor ~300.
             // 0.1 * X = 300 => X = 3000.
             const velScale = 3000;
             ctx.ellipse(0, 0, axis1 * scale * velScale, axis2 * scale * velScale, 0, 0, 2 * Math.PI); 
         } else {
-            ctx.strokeStyle = '#FF0000'; // Red for Force
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+            ctx.strokeStyle = '#f88132ff'; // Pastel Orange
+            ctx.fillStyle = '#f8813233';
             // Scale: Force is inverse. Typical ~7. Target ~50px. Factor ~7.
             // 0.1 * X = 7 => X = 70.
             const forceScale = 70;

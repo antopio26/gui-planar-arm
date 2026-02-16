@@ -316,7 +316,7 @@ ui.elements.btnToggleLimits.addEventListener('click', () => {
 ui.elements.btnToggleVel.addEventListener('click', () => {
     appState.settings.showVelEllipse = !appState.settings.showVelEllipse;
     ui.elements.btnToggleVel.classList.toggle('active', appState.settings.showVelEllipse);
-    ui.elements.btnToggleVel.textContent = `Vel Ellipse: ${appState.settings.showVelEllipse ? 'ON' : 'OFF'}`;
+    ui.elements.btnToggleVel.textContent = `Velocity: ${appState.settings.showVelEllipse ? 'ON' : 'OFF'}`;
     // Force redraw if possible, or wait next update
     if (appState.manipulator) appState.manipulator.update();
 });
@@ -324,7 +324,7 @@ ui.elements.btnToggleVel.addEventListener('click', () => {
 ui.elements.btnToggleForce.addEventListener('click', () => {
     appState.settings.showForceEllipse = !appState.settings.showForceEllipse;
     ui.elements.btnToggleForce.classList.toggle('active', appState.settings.showForceEllipse);
-    ui.elements.btnToggleForce.textContent = `Force Ellipse: ${appState.settings.showForceEllipse ? 'ON' : 'OFF'}`;
+    ui.elements.btnToggleForce.textContent = `Force: ${appState.settings.showForceEllipse ? 'ON' : 'OFF'}`;
     // Force redraw
     if (appState.manipulator) appState.manipulator.update();
 });
